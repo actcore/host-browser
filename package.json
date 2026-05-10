@@ -1,0 +1,46 @@
+{
+  "name": "@actcore/host",
+  "version": "0.1.0-alpha.0",
+  "description": "Browser host for ACT (Agent Component Tools) — runs signed wasm agent tools in a browser tab",
+  "keywords": ["act", "agent", "wasm", "webassembly", "component-model", "mcp", "ai", "tools", "browser", "wasip3", "jspi"],
+  "homepage": "https://actcore.dev",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/actcore/host-browser"
+  },
+  "bugs": "https://github.com/actcore/host-browser/issues",
+  "license": "MIT OR Apache-2.0",
+  "author": "Alexander Shishenko <alex@shishenko.com>",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": ["dist", "README.md", "LICENSE"],
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "npm run gen-types && tsc",
+    "clean": "rm -rf dist src/generated",
+    "typecheck": "tsc --noEmit",
+    "gen-types": "jco types wit --world-name host-view --async-mode jspi --async-wasi-imports -o src/generated",
+    "sync-wit": "bash scripts/sync-wit.sh",
+    "example": "python3 -m http.server 8765 --directory examples"
+  },
+  "dependencies": {
+    "@bytecodealliance/jco": "^1.19.0",
+    "@bytecodealliance/preview2-shim": "^0.17.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.6.0"
+  },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  }
+}

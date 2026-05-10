@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>@actcore/host — basic example</title>
+  <style>
+    body { font-family: ui-monospace, monospace; max-width: 900px; margin: 2em auto; padding: 0 1em; }
+    pre { background: #f5f5f5; padding: 1em; white-space: pre-wrap; border-radius: 4px; }
+    .ok { color: #0a0; } .err { color: #c00; } h3 { color: #06c; margin-top: 1.5em; }
+    code { background: #eee; padding: 0 .3em; border-radius: 3px; }
+    input[type=text] { width: 50ch; padding: .4em; font-family: inherit; }
+    button { padding: .4em .9em; cursor: pointer; }
+  </style>
+</head>
+<body>
+  <h1>@actcore/host</h1>
+  <p>Drop in a URL pointing at an <code>act-build pack</code>-ed wasm component (or use the default time-component fixture).
+     This page transpiles + instantiates it client-side, then calls <code>listTools()</code> and <code>get_current_time</code>.</p>
+
+  <p>
+    <input id="url" type="text" value="./time.wasm">
+    <button id="go">Run</button>
+  </p>
+
+  <h3>Output</h3>
+  <pre id="out">Press "Run" to start.</pre>
+
+  <script type="importmap">
+  {
+    "imports": {
+      "@actcore/host": "../dist/index.js",
+      "@bytecodealliance/jco/component":            "/node_modules/@bytecodealliance/jco/src/browser.js",
+      "@bytecodealliance/preview2-shim/cli":        "/node_modules/@bytecodealliance/preview2-shim/lib/browser/cli.js",
+      "@bytecodealliance/preview2-shim/clocks":     "/node_modules/@bytecodealliance/preview2-shim/lib/browser/clocks.js",
+      "@bytecodealliance/preview2-shim/io":         "/node_modules/@bytecodealliance/preview2-shim/lib/browser/io.js",
+      "@bytecodealliance/preview2-shim/filesystem": "/node_modules/@bytecodealliance/preview2-shim/lib/browser/filesystem.js",
+      "@bytecodealliance/preview2-shim/http":       "/node_modules/@bytecodealliance/preview2-shim/lib/browser/http.js",
+      "@bytecodealliance/preview2-shim/random":     "/node_modules/@bytecodealliance/preview2-shim/lib/browser/random.js",
+      "@bytecodealliance/preview2-shim/sockets":    "/node_modules/@bytecodealliance/preview2-shim/lib/browser/sockets.js"
+    }
+  }
+  </script>
+
+  <script type="module">
+    import { runComponent } from '@actcore/host';
+
+    const out = document.getElementById('out');
+    const log = (s, cls) => out.innerHTML += `<span class="${cls||''}">${s}</span>\n`;
+
+    document.getElementById('go').addEventListener('click', async () => {
+      out.textContent = '';
+      try {
+        const url = document.getElementById('url').value.trim();
+        log('fetching ' + url + '...');
+        const bytes = new Uint8Array(await (await fetch(url)).arrayBuffer());
+        log('  fetched ' + bytes.length + ' bytes', 'ok');
+
+        log('instantiating component...');
+        const { toolProvider } = await runComponent(bytes, {
+          name: 'demo',
+          shimBase: location.origin + '/node_modules/@bytecodealliance/preview2-shim/lib/browser/',
+        });
+        log('  ok', 'ok');
+
+        log('listing tools...');
+        const { tools } = await toolProvider.listTools([]);
+        log('  got ' + tools.length + ' tools', 'ok');
+        for (const t of tools) {
+          const desc = t.description.tag === 'plain' ? t.description.val : '[localized]';
+          log('    • ' + t.name + ' — ' + desc);
+        }
+
+        const target = tools.find(t => t.name === 'get_current_time') || tools[0];
+        log('calling ' + target.name + '...');
+        const result = await toolProvider.callTool(target.name, new Uint8Array([0xa0]), []);
+        if (result.tag === 'immediate') {
+          for (const ev of result.val) {
+            if (ev.tag === 'content') {
+              const mime = ev.val.mimeType || 'opaque';
+              if (mime.startsWith('text/') || mime === 'application/json') {
+                log('  → (' + mime + ') ' + new TextDecoder().decode(ev.val.data), 'ok');
+              } else {
+                log('  → (' + ev.val.data.length + ' bytes, ' + mime + ')');
+              }
+            } else {
+              log('  → error: ' + JSON.stringify(ev.val), 'err');
+            }
+          }
+        } else {
+          log('  → streaming result (not yet rendered)');
+        }
+      } catch (e) {
+        log('FAILED: ' + e.message, 'err');
+        log(e.stack || '', 'err');
+      }
+    });
+  </script>
+</body>
+</html>

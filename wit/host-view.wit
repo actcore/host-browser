@@ -1,0 +1,14 @@
+/// Synthetic world that exists only to drive `jco types` codegen for @actcore/host.
+///
+/// From a host's perspective, what a transpiled component EXPORTS is what we
+/// IMPORT. So we declare imports of the two provider interfaces we care about,
+/// and jco generates the matching TypeScript types.
+///
+/// The host does not implement a real component against this world — it
+/// reaches into transpiled-component modules via blob-URL dynamic import.
+package act:host-view@0.0.0;
+
+world host-view {
+  import act:tools/tool-provider@0.1.0;
+  import act:sessions/session-provider@0.1.0;
+}
