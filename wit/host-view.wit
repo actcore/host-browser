@@ -1,14 +1,20 @@
-/// Synthetic world that exists only to drive `jco types` codegen for @actcore/host.
+/// What act-host implements. Drives `jco types` codegen for @actcore/host:
+/// imports here are the host-side capability surface that transpiled
+/// components see as their imports.
 ///
-/// From a host's perspective, what a transpiled component EXPORTS is what we
-/// IMPORT. So we declare imports of the two provider interfaces we care about,
-/// and jco generates the matching TypeScript types.
-///
-/// The host does not implement a real component against this world — it
-/// reaches into transpiled-component modules via blob-URL dynamic import.
+/// Two groups:
+///   1. Provider interfaces — `import` here so jco generates TS types we use
+///      when calling INTO a transpiled component.
+///   2. WASI interfaces — `import` here for typegen of the shim
+///      implementations that satisfy components' WASI imports.
 package act:host-view@0.0.0;
 
 world host-view {
+  // (1) Component-export typings
   import act:tools/tool-provider@0.1.0;
   import act:sessions/session-provider@0.1.0;
+
+  // (2) WASI capability implementations
+  import wasi:http/types@0.3.0-rc-2026-03-15;
+  import wasi:http/client@0.3.0-rc-2026-03-15;
 }
