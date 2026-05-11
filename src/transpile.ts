@@ -100,8 +100,24 @@ function buildBlobModuleGraph(
   entrySrc = applyPatches(entrySrc);
   entrySrc = rewriteBareImports(entrySrc, shimBase);
 
+  // jco emits `new URL('./X.core.wasm', import.meta.url)` for core wasm refs.
+  // When the entry module loads from a blob: URL, that URL constructor resolves
+  // to the page origin's root — which 404s. Rewrite the whole expression to
+  // the absolute blob URL of our core-wasm blob.
   for (const [path, blobUrl] of Object.entries(wasmUrls)) {
+    const pattern = new RegExp(
+      String.raw`new\s+URL\s*\(\s*(['"\`])\.\/` +
+        path.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') +
+        String.raw`\1\s*,\s*import\.meta\.url\s*\)`,
+      'g',
+    );
+    entrySrc = entrySrc.replace(pattern, JSON.stringify(blobUrl));
     entrySrc = replaceAllSpec(entrySrc, `./${path}`, blobUrl);
+  }
+  // Final sanity check.
+  const stragglers = entrySrc.match(/['"`][^'"`]*\.core\.wasm['"`]/g);
+  if (stragglers) {
+    console.warn('[@actcore/host] unmatched .core.wasm references:', stragglers);
   }
   for (const [path, blobUrl] of Object.entries(subUrls)) {
     entrySrc = replaceAllSpec(entrySrc, `./${path}`, blobUrl);

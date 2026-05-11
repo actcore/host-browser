@@ -58,6 +58,8 @@ export async function runComponent(
     );
   }
 
+  installCompileStreamingFallback();
+
   const entryBlobUrl = await transpileToBlobUrl(bytes, options);
 
   // Dynamic import from blob: URL is supported in all browsers with ESM modules.
@@ -72,6 +74,57 @@ export async function runComponent(
   }
 
   return { toolProvider: wrapToolProvider(mod.toolProvider) };
+}
+
+/**
+ * jco's transpiled output uses `WebAssembly.compileStreaming(fetch(...))`,
+ * which Chrome's strict MIME check rejects for blob: URLs in some
+ * dev-server setups (Vite, etc.) where the blob's Content-Type is reported
+ * as something other than exactly `application/wasm`. Wrap with a fallback
+ * to non-streaming `compile()` that doesn't care.
+ *
+ * Idempotent — installs at most once per page load.
+ */
+function installCompileStreamingFallback(): void {
+  const w = WebAssembly as unknown as {
+    compileStreaming?: (source: Response | Promise<Response>) => Promise<WebAssembly.Module>;
+    instantiateStreaming?: (
+      source: Response | Promise<Response>,
+      imports?: WebAssembly.Imports,
+    ) => Promise<WebAssembly.WebAssemblyInstantiatedSource>;
+    __actcoreStreamingPatched?: boolean;
+  };
+  if (w.__actcoreStreamingPatched) return;
+  w.__actcoreStreamingPatched = true;
+
+  const origCompile = w.compileStreaming?.bind(WebAssembly);
+  if (origCompile) {
+    w.compileStreaming = async function (source) {
+      try {
+        return await origCompile(source);
+      } catch (err) {
+        const msg = String((err as Error).message || err);
+        if (!/MIME|Content-Type/i.test(msg)) throw err;
+        const resp = source instanceof Response ? source : await source;
+        return WebAssembly.compile(await resp.arrayBuffer());
+      }
+    };
+  }
+
+  const origInstantiate = w.instantiateStreaming?.bind(WebAssembly);
+  if (origInstantiate) {
+    w.instantiateStreaming = async function (source, imports) {
+      try {
+        return await origInstantiate(source, imports);
+      } catch (err) {
+        const msg = String((err as Error).message || err);
+        if (!/MIME|Content-Type/i.test(msg)) throw err;
+        const resp = source instanceof Response ? source : await source;
+        const buf = await resp.arrayBuffer();
+        return WebAssembly.instantiate(buf, imports);
+      }
+    };
+  }
 }
 
 /**
