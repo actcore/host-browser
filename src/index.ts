@@ -43,3 +43,6 @@ export type {
 
 export type { RunComponentOptions, ComponentInstance, ToolProvider } from './host-api.js';
 export { runComponent } from './host-api.js';
+
+export type { ResolveLocalizedStringOptions } from './locale.js';
+export { resolveLocalizedString } from './locale.js';
