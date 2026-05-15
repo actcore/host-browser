@@ -31,6 +31,14 @@ export async function transpileToBlobUrl(
 
   const shimBase = normalizeShimBase(options.shimBase);
   const name = options.name ?? DEFAULT_NAME;
+  // Host-view exports wasi:http p3 from our own shim (see wit/host-view.wit
+  // and src/shims/wasi-http.ts). preview2-shim's http.js doesn't carry the
+  // `client` or p3-shaped `types` exports a wasip3 component imports, so
+  // wasi:http resolves to a separate URL than the rest of WASI. Defaults to
+  // the bundled shim sibling-to-dist/index.js; callers can override (useful
+  // when dist/ is served from a different origin than preview2-shim).
+  const wasiHttpShimUrl = options.wasiHttpShimUrl
+    ?? new URL('./shims/wasi-http.js', import.meta.url).href;
 
   // jco's browser API doesn't apply the CLI's default WASI specifier map, so
   // we pass one explicitly pointing at absolute browser-shim URLs. The `#*`
@@ -42,10 +50,7 @@ export async function transpileToBlobUrl(
       ['wasi:cli/*', shimBase + 'cli.js#*'],
       ['wasi:clocks/*', shimBase + 'clocks.js#*'],
       ['wasi:filesystem/*', shimBase + 'filesystem.js#*'],
-      // Host-view exports wasi:http p3 from our own shim (see wit/host-view.wit
-      // and src/shims/wasi-http.ts). preview2-shim's http.js does not carry the
-      // `client` or p3-shaped `types` exports a wasip3 component imports.
-      ['wasi:http/*', shimBase + 'shims/wasi-http.js#*'],
+      ['wasi:http/*', wasiHttpShimUrl + '#*'],
       ['wasi:io/*', shimBase + 'io.js#*'],
       ['wasi:random/*', shimBase + 'random.js#*'],
       ['wasi:sockets/*', shimBase + 'sockets.js#*'],

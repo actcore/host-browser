@@ -33,6 +33,13 @@ export interface RunComponentOptions {
    * Example: `'https://cdn.jsdelivr.net/npm/@bytecodealliance/preview2-shim@0.17.0/lib/browser/'`
    */
   shimBase: string;
+  /**
+   * Optional absolute URL of `dist/shims/wasi-http.js` from `@actcore/host`.
+   * Defaults to the bundled shim resolved relative to host-api's module URL.
+   * Override when `@actcore/host` is loaded from one origin and you want the
+   * wasi:http p3 shim served from another.
+   */
+  wasiHttpShimUrl?: string;
 }
 
 /**
