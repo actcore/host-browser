@@ -1,5 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import {
+  setGlobalDispatcher,
+  MockAgent,
+  fetch as undiciFetch,
+} from 'undici';
 
 import {
   Fields,
@@ -9,6 +14,16 @@ import {
   types,
   client,
 } from '../dist/shims/wasi-http.js';
+
+// Node's bundled `fetch` is built on Node's internal undici copy, NOT the one
+// `npm i undici` installs into node_modules. `setGlobalDispatcher` from the
+// user-installed undici thus only intercepts calls routed through the
+// user-installed `undici.fetch` — Node's global fetch ignores it.
+//
+// To make MockAgent intercept the shim's `fetch` calls in Node, swap
+// `globalThis.fetch` for undici's fetch during the test. The shim itself
+// still calls the global so it stays browser-portable.
+globalThis.fetch = undiciFetch;
 
 // Helper: build a Request via the WIT-mapped static factory. The runtime
 // constructor is private (gen-types models it as such), so callers must go
@@ -27,6 +42,14 @@ function makeResponse({ headers, body, trailers } = {}) {
   const t = trailers ?? Promise.resolve({ tag: 'ok', val: undefined });
   const [resp] = Response.new(h, body, t);
   return resp;
+}
+
+// Task 7 will rewire response bodies through `Response.consumeBody` lowering
+// into the native fetch ReadableStream. For Task 6 the shim buffers the
+// response body as a Uint8Array on `resp._bufferedBody`; this helper reads it
+// directly. When Task 7 lands, swap this for whatever consume-body returns.
+async function readResponseBody(resp) {
+  return resp._bufferedBody ?? new Uint8Array();
 }
 
 test('Fields: set then get returns values in order', () => {
@@ -112,16 +135,57 @@ test('RequestOptions: clone is independent', () => {
   assert.equal(c.getConnectTimeout(), 1_000_000n);
 });
 
-test('client.send throws not-implemented (stub)', async () => {
-  await assert.rejects(
-    () => client.send(makeRequest()),
-    (e) => e.tag === 'internal-error' && e.val.includes('not implemented'),
-  );
-});
-
 test('types namespace exports the four resource classes', () => {
   assert.equal(types.Fields, Fields);
   assert.equal(types.Request, Request);
   assert.equal(types.Response, Response);
   assert.equal(types.RequestOptions, RequestOptions);
+});
+
+test('client.send: GET maps method/url, returns 200 with body', async () => {
+  const mockAgent = new MockAgent();
+  mockAgent.disableNetConnect();
+  setGlobalDispatcher(mockAgent);
+  const pool = mockAgent.get('https://example.com');
+  pool.intercept({ path: '/hello', method: 'GET' })
+      .reply(200, 'world', { headers: { 'content-type': 'text/plain' } });
+
+  const r = makeRequest();
+  r.setMethod({ tag: 'get' });
+  r.setScheme({ tag: 'HTTPS' });
+  r.setAuthority('example.com');
+  r.setPathWithQuery('/hello');
+
+  const resp = await client.send(r);
+  assert.equal(resp.getStatusCode(), 200);
+  // Read response body — implementer must choose the right accessor (body field,
+  // body() method, ReadableStream, etc.) per the shim's actual shape.
+  const body = await readResponseBody(resp);
+  assert.equal(new TextDecoder().decode(body), 'world');
+  const ct = resp.getHeaders().get('content-type');
+  assert.equal(new TextDecoder().decode(ct[0]), 'text/plain');
+
+  await mockAgent.close();
+});
+
+test('client.send: network failure maps to error-code variant', async () => {
+  const mockAgent = new MockAgent();
+  mockAgent.disableNetConnect();
+  setGlobalDispatcher(mockAgent);
+  const pool = mockAgent.get('https://unreachable.example');
+  pool.intercept({ path: '/' }).replyWithError(new TypeError('fetch failed'));
+
+  const r = makeRequest();
+  r.setMethod({ tag: 'get' });
+  r.setScheme({ tag: 'HTTPS' });
+  r.setAuthority('unreachable.example');
+  r.setPathWithQuery('/');
+
+  await assert.rejects(
+    () => client.send(r),
+    (e) =>
+      e.tag === 'internal-error' || e.tag === 'connection-refused' ||
+      e.tag === 'destination-not-found',
+  );
+  await mockAgent.close();
 });

@@ -2,7 +2,19 @@
   "name": "@actcore/host",
   "version": "0.1.0-alpha.0",
   "description": "Browser host for ACT (Agent Component Tools) — runs signed wasm agent tools in a browser tab",
-  "keywords": ["act", "agent", "wasm", "webassembly", "component-model", "mcp", "ai", "tools", "browser", "wasip3", "jspi"],
+  "keywords": [
+    "act",
+    "agent",
+    "wasm",
+    "webassembly",
+    "component-model",
+    "mcp",
+    "ai",
+    "tools",
+    "browser",
+    "wasip3",
+    "jspi"
+  ],
   "homepage": "https://actcore.dev",
   "repository": {
     "type": "git",
@@ -20,7 +32,11 @@
   },
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
-  "files": ["dist", "README.md", "LICENSE"],
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
   "engines": {
     "node": ">=20"
   },
@@ -38,7 +54,8 @@
     "@bytecodealliance/preview2-shim": "^0.17.0"
   },
   "devDependencies": {
-    "typescript": "^5.6.0"
+    "typescript": "^5.6.0",
+    "undici": "^8.3.0"
   },
   "publishConfig": {
     "access": "public",
