@@ -101,7 +101,80 @@ export function customLiftSource(): string {
             task.resolve([{ tag: 'immediate', val: events }]);
             return;
           } else {
-            throw new Error('@actcore/host: streaming tool-result not yet supported');
+            // Streaming variant: tool-result::streaming(stream<tool-event>).
+            // params = [trTag, streamEndWaitableIdx, ...pad]. Lift the stream
+            // via jco's _liftFlatStream (in scope of the entry module) and
+            // drain it eagerly into an event list, then resolve. streamTableIdx
+            // for stream<tool-event> in call-tool's task-return is 1 in this
+            // component; if jco's registration order changes this hardcoded
+            // index must be derived. See Task 8.6 follow-up.
+            const streamEndWaitableIdx = params[1];
+            const liftCtx2 = { memory, useDirectParams: true, params: [streamEndWaitableIdx], componentIdx, stringEncoding };
+            let stream;
+            try {
+              const inner = _liftFlatStream({ streamTableIdx: 1, componentIdx });
+              [stream] = inner(liftCtx2);
+            } catch (e) {
+              throw new Error('failed to lift tool-event stream: ' + (e && e.message ? e.message : e));
+            }
+
+            const decodeEventAt = (base) => {
+              const evTag = dv.getUint8(base);
+              if (evTag === 0) {
+                const dataPtr = dv.getUint32(base + 4, true);
+                const dataLen = dv.getUint32(base + 8, true);
+                const mimeTag = dv.getUint8(base + 12);
+                const mimePtr = dv.getUint32(base + 16, true);
+                const mimeLen = dv.getUint32(base + 20, true);
+                const mime = mimeTag === 1 ? readStr(mimePtr, mimeLen) : null;
+                return {
+                  tag: 'content',
+                  val: {
+                    data: new Uint8Array(m, dataPtr, dataLen).slice(),
+                    mimeType: mime,
+                    metadata: [],
+                  },
+                };
+              }
+              return {
+                tag: 'error',
+                val: { kind: 'std:internal', message: { tag: 'plain', val: '[unparsed tool-event tag=' + evTag + ']' }, metadata: [] },
+              };
+            };
+
+            // jco's Stream is async-iterable via Stream.next(). The shape of
+            // what next() yields depends on jco's streamEnd.read() — for a
+            // per-element stream<tool-event> we expect either an item address
+            // (number) or a decoded record. Probe and adapt.
+            const drained = (async () => {
+              const events = [];
+              try {
+                for (let i = 0; i < 1024; i++) {
+                  const item = await stream.next();
+                  if (item === undefined || item === null) break;
+                  if (typeof item === 'number') { events.push(decodeEventAt(item)); continue; }
+                  if (item && typeof item === 'object' && 'done' in item && item.done) break;
+                  if (item && typeof item === 'object' && 'value' in item) {
+                    const v = item.value;
+                    if (v === undefined) break;
+                    if (typeof v === 'number') events.push(decodeEventAt(v));
+                    else if (v && typeof v === 'object' && 'tag' in v) events.push(v);
+                    else events.push({ tag: 'error', val: { kind: 'std:internal', message: { tag: 'plain', val: '[unhandled stream item shape: ' + (typeof v) + ']' }, metadata: [] } });
+                    continue;
+                  }
+                  if (item && typeof item === 'object' && 'tag' in item) { events.push(item); continue; }
+                  break;
+                }
+              } catch (e) {
+                events.push({ tag: 'error', val: { kind: 'std:internal', message: { tag: 'plain', val: 'stream drain failed: ' + (e && e.message ? e.message : e) }, metadata: [] } });
+              }
+              return events;
+            })();
+
+            // Defer task.resolve until draining completes. Calling it
+            // synchronously with a Promise tripped jco's results-length check.
+            drained.then((events) => task.resolve([{ tag: 'streaming', val: events }]));
+            return;
           }
         }
       }
