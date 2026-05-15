@@ -30,6 +30,7 @@
     "typecheck": "tsc --noEmit",
     "gen-types": "jco types wit --world-name host-view --async-mode jspi --async-wasi-imports -o src/generated",
     "sync-wit": "bash scripts/sync-wit.sh",
+    "test": "node --test 'tests/*.test.mjs'",
     "example": "python3 -m http.server 8765 --directory examples"
   },
   "dependencies": {
