@@ -42,7 +42,10 @@ export async function transpileToBlobUrl(
       ['wasi:cli/*', shimBase + 'cli.js#*'],
       ['wasi:clocks/*', shimBase + 'clocks.js#*'],
       ['wasi:filesystem/*', shimBase + 'filesystem.js#*'],
-      ['wasi:http/*', shimBase + 'http.js#*'],
+      // Host-view exports wasi:http p3 from our own shim (see wit/host-view.wit
+      // and src/shims/wasi-http.ts). preview2-shim's http.js does not carry the
+      // `client` or p3-shaped `types` exports a wasip3 component imports.
+      ['wasi:http/*', shimBase + 'shims/wasi-http.js#*'],
       ['wasi:io/*', shimBase + 'io.js#*'],
       ['wasi:random/*', shimBase + 'random.js#*'],
       ['wasi:sockets/*', shimBase + 'sockets.js#*'],
