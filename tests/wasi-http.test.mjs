@@ -168,6 +168,56 @@ test('client.send: GET maps method/url, returns 200 with body', async () => {
   await mockAgent.close();
 });
 
+test('Response.consumeBody: returns ReadableStream<number> of body bytes', async () => {
+  // Task 7 contract: jco's `_trampoline54` calls `Response.consumeBody(rsc,
+  // futureResult)` and treats `tuple4_0` as one of {asyncIterable, iterable,
+  // ReadableStream}. Each value yielded must be a single u8 (number), because
+  // the stream lowering's `_lowerFlatU8` writes one byte per value via
+  // setUint32. This test exercises the same path: send → consumeBody → drain
+  // reader → assert byte-by-byte equality with the served body.
+  const mockAgent = new MockAgent();
+  mockAgent.disableNetConnect();
+  setGlobalDispatcher(mockAgent);
+  const pool = mockAgent.get('https://example.com');
+  pool.intercept({ path: '/binary', method: 'GET' })
+      .reply(200, new Uint8Array([0, 1, 2, 254, 255]), {
+        headers: { 'content-type': 'application/octet-stream' },
+      });
+
+  const r = makeRequest();
+  r.setMethod({ tag: 'get' });
+  r.setScheme({ tag: 'HTTPS' });
+  r.setAuthority('example.com');
+  r.setPathWithQuery('/binary');
+
+  const resp = await client.send(r);
+  const okFuture = Promise.resolve({ tag: 'ok', val: undefined });
+  const [stream, trailersFuture] = Response.consumeBody(resp, okFuture);
+
+  // Must be a global ReadableStream so jco's `_PlatformReadableStream`
+  // instanceof check matches.
+  assert.ok(stream instanceof ReadableStream, 'expected ReadableStream');
+
+  const reader = stream.getReader();
+  const collected = [];
+  // Drain one value per read() call — each is a single byte (number), per
+  // the WIT stream<u8> ABI as lowered by jco.
+  // eslint-disable-next-line no-constant-condition
+  while (true) {
+    const { value, done } = await reader.read();
+    if (done) break;
+    assert.equal(typeof value, 'number', 'each chunk must be a u8 number');
+    collected.push(value);
+  }
+  assert.deepEqual(collected, [0, 1, 2, 254, 255]);
+
+  // Trailers future is a real Promise — drain it to make sure it resolves.
+  const trailers = await trailersFuture;
+  assert.equal(trailers.tag, 'ok');
+
+  await mockAgent.close();
+});
+
 test('client.send: network failure maps to error-code variant', async () => {
   const mockAgent = new MockAgent();
   mockAgent.disableNetConnect();

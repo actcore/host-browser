@@ -282,13 +282,26 @@ export class Request {
   }
 }
 
+// jco's emitted `_trampoline54` for `[static]response.consume-body` calls
+// `Response.consumeBody(rsc0, futureResult3)`, destructures the returned tuple
+// `[tuple4_0, tuple4_1]`, then probes `tuple4_0` with `symbolAsyncIterator in
+// _`, then `symbolIterator in _`, then `instanceof _PlatformReadableStream`
+// (= `globalThis.ReadableStream`). The chosen branch becomes `readFn5` whose
+// `.next()`/`.read()` results feed `hostWriteEnd.write(values)` — and the
+// inner `lowerFn` is `_lowerFlatU8`, which writes ONE byte per value via
+// `setUint32(ptr, ctx.vals[0], true)`. That means each item yielded must be
+// a `number` (u8), NOT a `Uint8Array`. The body chunk from a native fetch
+// (`ReadableStream<Uint8Array>`) is therefore wrong shape; we have to expand
+// it to one byte per chunk. `tuple4_1` is written verbatim to memory as an
+// Int32 — for our purposes a resolved Promise<{tag:'ok'}> is fine, jco's
+// trailers wiring is invoked separately. This is **Branch B** of the Task 7
+// plan: synchronous static method returning [stream, futureValue].
 export class Response {
   statusCode: StatusCode = 200;
   headers: Fields;
   body: ReadableStream<number> | undefined = undefined;
-  // Task 6 buffer: `client.send` reads the native fetch body to a Uint8Array
-  // and stashes it here. Task 7 will replace this with a real ReadableStream
-  // surfaced through `consumeBody` lowering.
+  // Internal buffer populated by `client.send`. The data flow lands here
+  // before `consumeBody` lowers it into a `ReadableStream<number>` for jco.
   _bufferedBody: Uint8Array | undefined = undefined;
   trailers: Promise<Result<Trailers | undefined, ErrorCode>>;
 
@@ -339,15 +352,25 @@ export class Response {
     ReadableStream<number>,
     Promise<Result<Trailers | undefined, ErrorCode>>,
   ] {
-    // Task 7 wires this to the real `fetch()` response.body. For now return
-    // an empty stream + ok trailers so the surface compiles.
-    const body =
-      this_.body ??
-      new ReadableStream<number>({
-        start(controller) {
-          controller.close();
-        },
-      });
+    // If a body stream was provided directly (synthetic Response in tests),
+    // honor it. Otherwise lower the buffered Uint8Array from `client.send`
+    // into a ReadableStream<number> — one byte per chunk, because jco's
+    // stream lowering invokes `_lowerFlatU8` on each `value` returned from
+    // the stream's reader (see the block comment above `class Response`).
+    if (this_.body) return [this_.body, this_.trailers];
+    const bytes = this_._bufferedBody ?? new Uint8Array(0);
+    const body = new ReadableStream<number>({
+      start(controller) {
+        // Enqueueing each byte individually is verbose, but matches the
+        // per-element semantics of the wasip3 `stream<u8>` ABI as jco
+        // implements it. Optimisation (yielding Uint8Array chunks once jco's
+        // stream lift supports typed-array batching) is a Phase 3 task.
+        for (let i = 0; i < bytes.length; i++) {
+          controller.enqueue(bytes[i]);
+        }
+        controller.close();
+      },
+    });
     return [body, this_.trailers];
   }
 }
