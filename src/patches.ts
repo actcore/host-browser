@@ -169,6 +169,20 @@ export function applyPatches(src: string): string {
 
 
 
+  // DIAGNOSTIC
+  out = out.replace(
+    "const _trampoline6 = function(arg0) {",
+    "const _trampoline6 = function(arg0) { (globalThis.__act_t6=globalThis.__act_t6||[]).push({arg0, ct5Size: captureTable5.size, captureCnt5, ht5: handleTable5.slice(0,12)});",
+  );
+  out = out.replaceAll(
+    "lowerFn: () => { throw new Error('xxxignore'); }",
+    "// noop",
+  );
+  out = out.replace(
+    "variant42_1 = handle3;",
+    "(globalThis.__act_t69=globalThis.__act_t69||[]).push({handle3, captureCnt5, ct5Size: captureTable5.size}); variant42_1 = handle3;",
+  );
+
   return out;
 }
 
