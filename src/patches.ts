@@ -107,6 +107,13 @@ export function applyPatches(src: string): string {
     "lowerFn: () => 0 /* @actcore/host: throw-stub no-op (Task 8.9) */",
   );
 
+  // DIAGNOSTIC: log when Headers resource check fails so we can see what
+  // ret actually is and which Fields class we're comparing against.
+  out = out.replaceAll(
+    "throw new TypeError('Resource error: Not a valid \\\"Headers\\\" resource.');",
+    "console.warn('[@actcore/host] Headers check failed:', { ret, retCtor: ret?.constructor?.name, retCtorIs: ret?.constructor === Fields, FieldsRef: Fields, fieldsHas: ret && typeof ret === 'object' ? Object.keys(ret) : null }); throw new TypeError('Resource error: Not a valid \\\"Headers\\\" resource.');",
+  );
+
   return out;
 }
 
