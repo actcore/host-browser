@@ -120,15 +120,34 @@ export function applyPatches(src: string): string {
     "lowerFn: (obj) => { if (!obj || typeof obj !== 'object') return 0; if (obj[symbolRscHandle]) return obj[symbolRscHandle]; if (typeof Response !== 'undefined' && obj instanceof Response) { const rep = obj[symbolRscRep] || ++captureCnt5; captureTable5.set(rep, obj); return rscTableCreateOwn(handleTable5, rep); } if (typeof Fields !== 'undefined' && obj instanceof Fields) { const rep = obj[symbolRscRep] || ++captureCnt4; captureTable4.set(rep, obj); return rscTableCreateOwn(handleTable4, rep); } if (typeof Request !== 'undefined' && obj instanceof Request) { const rep = obj[symbolRscRep] || ++captureCnt7; captureTable7.set(rep, obj); return rscTableCreateOwn(handleTable7, rep); } if (typeof RequestOptions !== 'undefined' && obj instanceof RequestOptions) { const rep = obj[symbolRscRep] || ++captureCnt6; captureTable6.set(rep, obj); return rscTableCreateOwn(handleTable6, rep); } return 0; }",
   );
 
-  // PATCH: inline registration of the Response handle in trampoline69's
-  // ok-branch. The original `var handle3 = e[symbolRscHandle]` followed by
-  // `const rep = e[symbolRscRep] || ++captureCnt5` reuses cached values from
-  // a previous call (jco defines these as non-configurable so `delete` is a
-  // no-op, and the previous call's stale rep remains on `e`). Bypass BOTH
-  // cached values: force handle3=undefined and rep=++captureCnt5 directly.
+  // PATCH: force fresh resource-handle registration on every call.
+  //
+  // jco emits a stale-rep-reuse pattern across many trampoline lowerings:
+  //
+  //     var handle3 = e[symbolRscHandle];
+  //     if (!handle3) {
+  //       const rep = e[symbolRscRep] || ++captureCntN;
+  //       captureTableN.set(rep, e);
+  //       handle3 = rscTableCreateOwn(handleTableN, rep);
+  //     }
+  //
+  // The reuse via `e[symbolRscRep]` ties JS-side identity to a previously
+  // assigned wasm-side rep — but after the wasm releases its handle (e.g.
+  // between two tool calls) that rep is no longer valid, while the cached
+  // value still sits on the JS object. The captureTable lookup downstream
+  // then returns the stale entry (or undefined, falling into the
+  // `Object.create(Response.prototype)` shadow path), and the next host
+  // method call sees a bare-prototype object whose `.headers` etc. are
+  // undefined — failing the next `instanceof Fields` check.
+  //
+  // Replace the pattern with one that always allocates a fresh rep. Regex
+  // captures: $1=handleN var name, $2=binding name (e/ret/arg2/...), $3=N
+  // (captureCnt/captureTable/handleTable index). Anchored on
+  // `e[symbolRscHandle]` so it doesn't match the wasi:io/streams stream
+  // lowering site (which has a different shape).
   out = out.replace(
-    "if (!(e instanceof Response)) {\n      throw new TypeError('Resource error: Not a valid \\\"Response\\\" resource.');\n    }\n    var handle3 = e[symbolRscHandle];\n    if (!handle3) {\n      const rep = e[symbolRscRep] || ++captureCnt5;",
-    "if (!(e instanceof Response)) {\n      throw new TypeError('Resource error: Not a valid \\\"Response\\\" resource.');\n    }\n    /* @actcore/host: force fresh registration each call (Task 8.9) */\n    var handle3 = undefined;\n    if (!handle3) {\n      const rep = ++captureCnt5;",
+    /var (handle\d+) = (\w+)\[symbolRscHandle\];\s*\n\s*if \(![\w$]+\) \{\s*\n\s*const rep = \2\[symbolRscRep\] \|\| \+\+captureCnt(\d+);/g,
+    '/* @actcore/host: force fresh registration each call */\n      var $1 = undefined;\n      if (!$1) {\n        const rep = ++captureCnt$3;',
   );
 
   // PATCH: StreamWritableEnd.write hardcodes count=1 even when called with
@@ -180,16 +199,17 @@ export function applyPatches(src: string): string {
 
 
 
-  // PATCH: trampoline69 inline body's `variant42_1 = handle3` is dead code in
+  // PATCH: trampoline inline body's `variantN_1 = handleM` is dead code in
   // jco's emitted output — the wasm-side reads its result handle from memory
   // at the result-area pointer (last arg). But subtask.onResolve doesn't
   // always wire through to our resultLowerFns lowerFn, so the memory write
-  // never happens, and the wasm gets garbage instead of handle3. Write the
+  // never happens, and the wasm gets garbage instead of handleM. Write the
   // discriminant + handle directly at the result-area pointer from the inline
-  // body (mirrors what sync trampolines like trampoline73 already do).
+  // body. The trampoline number (N) and handle number (M) vary across jco
+  // versions, so match the pattern by structure rather than by literal index.
   out = out.replace(
-    "variant42_0 = 0;\n    variant42_1 = handle3;",
-    "variant42_0 = 0;\n    variant42_1 = handle3;\n    /* @actcore/host: inline-write the lowered result to wasm memory at the result-area pointer (Task 8.9). jco's emitted code computes variant42_N flat values but never writes them; subtask.onResolve's lowers[0] path also doesn't always fire. */ { const _args = arguments; const _resPtr = _args[_args.length - 1]; if (typeof _resPtr === 'number' && memory0) { const _dv = new DataView(memory0.buffer); _dv.setUint8(_resPtr + 0, 0, true); _dv.setUint32(_resPtr + 4, handle3, true); _dv.setUint32(_resPtr + 8, handle3, true); }}",
+    /(variant(\d+)_0 = 0;\s*\n\s*variant\2_1 = (handle\d+);)/g,
+    "$1\n    /* @actcore/host: inline-write the lowered result to wasm memory at the result-area pointer */ { const _args = arguments; const _resPtr = _args[_args.length - 1]; if (typeof _resPtr === 'number' && memory0) { const _dv = new DataView(memory0.buffer); _dv.setUint8(_resPtr + 0, 0, true); _dv.setUint32(_resPtr + 4, $3, true); _dv.setUint32(_resPtr + 8, $3, true); }}",
   );
 
   return out;
