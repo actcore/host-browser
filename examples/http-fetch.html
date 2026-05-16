@@ -23,6 +23,7 @@
     URL to fetch (in the component):
     <input id="url" type="text" value="https://api.github.com/zen">
     <button id="go">Run</button>
+    <button id="go2">Run x2</button>
   </p>
 
   <h3>Output</h3>
@@ -50,6 +51,56 @@
 
     const out = document.getElementById('out');
     const log = (s, cls) => out.innerHTML += `<span class="${cls||''}">${s}</span>\n`;
+
+    let cachedProvider = null;
+    async function loadProvider() {
+      if (cachedProvider) return cachedProvider;
+      log('fetching ./component_http_client.wasm...');
+      const bytes = new Uint8Array(await (await fetch('./component_http_client.wasm')).arrayBuffer());
+      log('  fetched ' + bytes.length + ' bytes', 'ok');
+      log('instantiating component...');
+      const { toolProvider } = await runComponent(bytes, {
+        name: 'http-client',
+        shimBase: location.origin + '/node_modules/@bytecodealliance/preview2-shim/lib/browser/',
+        wasiHttpShimUrl: location.origin + '/dist/shims/wasi-http.js',
+      });
+      log('  ok', 'ok');
+      cachedProvider = toolProvider;
+      return toolProvider;
+    }
+
+    async function callFetch(url) {
+      const tp = await loadProvider();
+      const argsCbor = new Uint8Array(cbor.encode({ url }));
+      log('calling fetch(' + url + ')...');
+      const result = await tp.callTool('fetch', argsCbor, []);
+      log('  call returned (' + result.tag + ')', 'ok');
+      if (result.tag === 'streaming') {
+        for (const ev of result.val) {
+          if (ev.tag === 'content') {
+            const mime = (ev.val.mimeType?.tag === 'some' ? ev.val.mimeType.val : ev.val.mimeType) || 'opaque';
+            const data = ev.val.data instanceof Uint8Array ? ev.val.data : new Uint8Array(ev.val.data);
+            log('  → (' + mime + ', ' + data.length + ' bytes) ' + (mime.startsWith('text/') || mime === 'application/json' ? new TextDecoder().decode(data).slice(0, 200) : ''), 'ok');
+          } else {
+            log('  → error: ' + JSON.stringify(ev.val), 'err');
+          }
+        }
+      } else {
+        log('  (immediate, ' + result.val.length + ' events)');
+      }
+    }
+
+    document.getElementById('go2').addEventListener('click', async () => {
+      out.textContent = '';
+      try {
+        await callFetch(document.getElementById('url').value.trim());
+        log('--- second call ---');
+        await callFetch(document.getElementById('url').value.trim());
+      } catch (e) {
+        log('FAILED: ' + e.message, 'err');
+        log(e.stack || '', 'err');
+      }
+    });
 
     document.getElementById('go').addEventListener('click', async () => {
       out.textContent = '';
