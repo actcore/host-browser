@@ -114,6 +114,12 @@ export function applyPatches(src: string): string {
     "globalThis.__actcoreHdrDbg = globalThis.__actcoreHdrDbg || []; globalThis.__actcoreHdrDbg.push({ retType: typeof ret, retIsNull: ret === null, retIsUndef: ret === undefined, retCtor: ret?.constructor?.name, rscCtor: rsc0?.constructor?.name, rscHasHeaders: rsc0 && 'headers' in rsc0, rscHeadersType: rsc0?.headers === null ? 'null' : typeof rsc0?.headers, handle1Val: handle1, rep2Val: rep2 }); throw new TypeError('Resource error: Not a valid \\\"Headers\\\" resource.');",
   );
 
+  // DIAGNOSTIC: capture handle3 in send's ok-branch to see what gets returned.
+  out = out.replaceAll(
+    "variant42_1 = handle3;",
+    "globalThis.__actcoreSendDbg = (globalThis.__actcoreSendDbg||[]); globalThis.__actcoreSendDbg.push({ at: 'send-ok', handle3, hasSymHandle: !!e[symbolRscHandle], symHandle: e[symbolRscHandle], symRep: e[symbolRscRep], captureCnt5_after: captureCnt5, hdrsType: typeof e.headers }); variant42_1 = handle3;",
+  );
+
   return out;
 }
 
