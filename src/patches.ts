@@ -117,24 +117,11 @@ export function applyPatches(src: string): string {
   //   Request → captureTable7/handleTable7
   out = out.replaceAll(
     "lowerFn: () => { throw new Error('missing/invalid resource metadata'); }",
-    "lowerFn: (obj) => { const _dbg = (globalThis.__actcoreLowerFn ||= []); if (!obj || typeof obj !== 'object') { _dbg.push({reason: 'no-obj', t: typeof obj}); return 0; } if (obj[symbolRscHandle]) { _dbg.push({reason: 'has-handle', h: obj[symbolRscHandle], cls: obj.constructor?.name}); return obj[symbolRscHandle]; } if (typeof Response !== 'undefined' && obj instanceof Response) { const rep = obj[symbolRscRep] || ++captureCnt5; captureTable5.set(rep, obj); const h = rscTableCreateOwn(handleTable5, rep); _dbg.push({reason: 'Response', rep, handle: h}); return h; } if (typeof Fields !== 'undefined' && obj instanceof Fields) { const rep = obj[symbolRscRep] || ++captureCnt4; captureTable4.set(rep, obj); const h = rscTableCreateOwn(handleTable4, rep); _dbg.push({reason: 'Fields', rep, handle: h}); return h; } _dbg.push({reason: 'unknown', cls: obj.constructor?.name}); return 0; }",
+    "lowerFn: (obj) => { if (!obj || typeof obj !== 'object') return 0; if (obj[symbolRscHandle]) return obj[symbolRscHandle]; if (typeof Response !== 'undefined' && obj instanceof Response) { const rep = obj[symbolRscRep] || ++captureCnt5; captureTable5.set(rep, obj); return rscTableCreateOwn(handleTable5, rep); } if (typeof Fields !== 'undefined' && obj instanceof Fields) { const rep = obj[symbolRscRep] || ++captureCnt4; captureTable4.set(rep, obj); return rscTableCreateOwn(handleTable4, rep); } if (typeof Request !== 'undefined' && obj instanceof Request) { const rep = obj[symbolRscRep] || ++captureCnt7; captureTable7.set(rep, obj); return rscTableCreateOwn(handleTable7, rep); } if (typeof RequestOptions !== 'undefined' && obj instanceof RequestOptions) { const rep = obj[symbolRscRep] || ++captureCnt6; captureTable6.set(rep, obj); return rscTableCreateOwn(handleTable6, rep); } return 0; }",
   );
 
-  // DIAGNOSTIC: trace what handle the wasm passes to getHeaders.
-  out = out.replaceAll(
-    "throw new TypeError('Resource error: Not a valid \\\"Headers\\\" resource.');",
-    "(globalThis.__actcoreHdrCheck ||= []).push({handle1, rep2, hasRsc: !!rsc0, rscHasHeaders: rsc0 && 'headers' in rsc0, hdrs: typeof rsc0?.headers, retIsUndef: ret === undefined, ct5Size: captureTable5.size, ht5Snapshot: handleTable5.slice(0, 10)}); throw new TypeError('Resource error: Not a valid \\\"Headers\\\" resource.');",
-  );
 
-  // PATCH: jco 1.19 sets `resultPtr: params[0]` in _lowerImport — but for
-  // async-lower imports the wit-bindgen Rust ABI passes (other-args..., resultPtr)
-  // with the result-area pointer in the LAST slot. Using params[0] writes the
-  // result to memory at the first arg's numeric value (e.g., a request handle
-  // = small int = junk address). Patch to use the LAST param.
-  out = out.replaceAll(
-    "resultPtr: params[0],",
-    "resultPtr: params[params.length - 1],",
-  );
+
 
 
   return out;
