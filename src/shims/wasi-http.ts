@@ -359,18 +359,26 @@ export class Response {
     // the stream's reader (see the block comment above `class Response`).
     if (this_.body) return [this_.body, this_.trailers];
     const bytes = this_._bufferedBody ?? new Uint8Array(0);
-    const body = new ReadableStream<number>({
-      start(controller) {
-        // Enqueueing each byte individually is verbose, but matches the
-        // per-element semantics of the wasip3 `stream<u8>` ABI as jco
-        // implements it. Optimisation (yielding Uint8Array chunks once jco's
-        // stream lift supports typed-array batching) is a Phase 3 task.
-        for (let i = 0; i < bytes.length; i++) {
-          controller.enqueue(bytes[i]);
-        }
-        controller.close();
+    // Per-byte enqueue matches wasip3 `stream<u8>` (each value is one u8).
+    // Default CountQueuingStrategy.highWaterMark=1 stalls the stream after
+    // one byte; set it to the body length so jco's batch-read drains all
+    // bytes in a single `count`-sized pull. Use `pull` for lazy filling.
+    let idx = 0;
+    const body = new ReadableStream<number>(
+      {
+        pull(controller) {
+          while (
+            idx < bytes.length &&
+            controller.desiredSize !== null &&
+            controller.desiredSize > 0
+          ) {
+            controller.enqueue(bytes[idx++]);
+          }
+          if (idx >= bytes.length) controller.close();
+        },
       },
-    });
+      { highWaterMark: Math.max(bytes.length, 1) },
+    );
     return [body, this_.trailers];
   }
 }
