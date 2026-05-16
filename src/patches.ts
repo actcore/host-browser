@@ -180,6 +180,16 @@ export function applyPatches(src: string): string {
 
 
 
+  // DIAGNOSTIC (temporary)
+  out = out.replace(
+    "const _trampoline6 = function(arg0) {",
+    "const _trampoline6 = function(arg0) { (globalThis.__act_t6=globalThis.__act_t6||[]).push({arg0, ct5Size: captureTable5.size, captureCnt5});",
+  );
+  out = out.replace(
+    "/* @actcore/host: force fresh registration each call (Task 8.9) */",
+    "/* @actcore/host: force fresh registration each call (Task 8.9) */ (globalThis.__act_t69pre=globalThis.__act_t69pre||[]).push({captureCnt5_before: captureCnt5, ct5Size: captureTable5.size, eHasHandle: !!e[symbolRscHandle], eRep: e[symbolRscRep]});",
+  );
+
   return out;
 }
 
