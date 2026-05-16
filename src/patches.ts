@@ -111,7 +111,7 @@ export function applyPatches(src: string): string {
   // ret actually is and which Fields class we're comparing against.
   out = out.replaceAll(
     "throw new TypeError('Resource error: Not a valid \\\"Headers\\\" resource.');",
-    "console.warn('[@actcore/host] Headers check failed:', { ret, retCtor: ret?.constructor?.name, retCtorIs: ret?.constructor === Fields, FieldsRef: Fields, fieldsHas: ret && typeof ret === 'object' ? Object.keys(ret) : null }); throw new TypeError('Resource error: Not a valid \\\"Headers\\\" resource.');",
+    "globalThis.__actcoreHdrDbg = globalThis.__actcoreHdrDbg || []; globalThis.__actcoreHdrDbg.push({ retType: typeof ret, retIsNull: ret === null, retIsUndef: ret === undefined, retCtor: ret?.constructor?.name, rscCtor: rsc0?.constructor?.name, rscHasHeaders: rsc0 && 'headers' in rsc0, rscHeadersType: rsc0?.headers === null ? 'null' : typeof rsc0?.headers, handle1Val: handle1, rep2Val: rep2 }); throw new TypeError('Resource error: Not a valid \\\"Headers\\\" resource.');",
   );
 
   return out;
