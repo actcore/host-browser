@@ -126,10 +126,10 @@ export function applyPatches(src: string): string {
     "(globalThis.__actcoreHdrCheck ||= []).push({handle1, rep2, hasRsc: !!rsc0, rscHasHeaders: rsc0 && 'headers' in rsc0, hdrs: typeof rsc0?.headers, retIsUndef: ret === undefined, ct5Size: captureTable5.size, ht5Snapshot: handleTable5.slice(0, 10)}); throw new TypeError('Resource error: Not a valid \\\"Headers\\\" resource.');",
   );
 
-  // DIAGNOSTIC: trace _lowerFlatU32 writes to memory.
-  out = out.replace(
+  // DIAGNOSTIC: trace all setUint32 writes via ctx.memory.
+  out = out.replaceAll(
     "new DataView(ctx.memory.buffer).setUint32(ctx.storagePtr, ctx.vals[0], true);",
-    "{ const _dv = new DataView(ctx.memory.buffer); _dv.setUint32(ctx.storagePtr, ctx.vals[0], true); (globalThis.__actcoreU32 ||= []).push({ptr: ctx.storagePtr, val: ctx.vals[0]}); }",
+    "{ const _dv = new DataView(ctx.memory.buffer); _dv.setUint32(ctx.storagePtr, ctx.vals[0], true); (globalThis.__actcoreU32 ||= []).push({ptr: ctx.storagePtr, val: ctx.vals[0], stack: new Error().stack?.split('\\n').slice(1, 4).join(' | ')}); }",
   );
 
 
