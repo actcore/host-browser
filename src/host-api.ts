@@ -25,12 +25,13 @@ export interface RunComponentOptions {
   /** Human-readable component name; used for output filenames during transpile. */
   name?: string;
   /**
-   * Absolute base URL for the `@bytecodealliance/preview2-shim/lib/browser/`
-   * directory. Required: jco's `transpile()` does not apply default WASI
-   * specifier mappings via its programmatic API, so callers must point at a
-   * concrete shim location (CDN, vendored copy, or bundler-resolved path).
+   * Absolute base URL for the `@bytecodealliance/preview2-shim` browser-build
+   * directory (`dist/browser/` as of preview2-shim 0.19; it was `lib/browser/`
+   * before). Required: we drive jco's low-level bindgen `generate()` directly
+   * and pass our own WASI specifier map, so callers must point at a concrete
+   * shim location (CDN, vendored copy, or bundler-resolved path).
    *
-   * Example: `'https://cdn.jsdelivr.net/npm/@bytecodealliance/preview2-shim@0.17.0/lib/browser/'`
+   * Example: `'https://cdn.jsdelivr.net/npm/@bytecodealliance/preview2-shim@0.19.0/dist/browser/'`
    */
   shimBase: string;
   /**
@@ -80,7 +81,7 @@ export async function runComponent(
     );
   }
 
-  return { toolProvider: wrapToolProvider(mod.toolProvider) };
+  return { toolProvider: mod.toolProvider };
 }
 
 /**
@@ -134,32 +135,3 @@ function installCompileStreamingFallback(): void {
   }
 }
 
-/**
- * Each `listTools` / `callTool` call hits `taskReturn` inside the transpiled
- * module, which we've patched to delegate to a custom lift selected by
- * `globalThis.__actcoreExpect`. This wrapper sets the flag for the duration
- * of one call so callers don't have to think about it.
- */
-function wrapToolProvider(raw: ToolProvider): ToolProvider {
-  const g = globalThis as unknown as Record<string, string | undefined>;
-  return {
-    async listTools(metadata) {
-      const prev = g['__actcoreExpect'];
-      g['__actcoreExpect'] = 'list-tools';
-      try {
-        return await raw.listTools(metadata);
-      } finally {
-        g['__actcoreExpect'] = prev;
-      }
-    },
-    async callTool(name, args, metadata) {
-      const prev = g['__actcoreExpect'];
-      g['__actcoreExpect'] = 'call-tool';
-      try {
-        return await raw.callTool(name, args, metadata);
-      } finally {
-        g['__actcoreExpect'] = prev;
-      }
-    },
-  };
-}

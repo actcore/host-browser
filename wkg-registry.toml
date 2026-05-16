@@ -1,0 +1,11 @@
+# Registry mapping for `npm run sync-wit` (`wkg wit fetch`, via WKG_CONFIG_FILE).
+#
+# Providing WKG_CONFIG_FILE replaces wkg's global config, so both namespaces
+# host-view.wit imports must be listed here:
+#   - act:*  → actcore.dev wasm-pkg registry, which advertises its OCI backend
+#     (ghcr.io/actcore) via https://actcore.dev/.well-known/wasm-pkg/registry.json.
+#     The act:* packages are public, so the fetch needs no credentials.
+#   - wasi:* → wasi.dev, the canonical registry for the WASI 0.3.0 packages.
+[namespace_registries]
+act = "actcore.dev"
+wasi = "wasi.dev"

@@ -1,17 +1,21 @@
 import { applyPatches, rewriteBareImports } from './patches.js';
 import type { RunComponentOptions } from './host-api.js';
 
-/** Subset of jco's browser-entry API we depend on. */
-interface JcoBrowserApi {
-  transpile(
-    bytes: Uint8Array,
-    options: {
-      name: string;
-      asyncMode?: { tag: 'sync' } | { tag: 'jspi'; val: { imports: string[]; exports: string[] } };
-      map?: Array<[string, string]>;
-    },
-  ): Promise<{ files: Array<[string, Uint8Array]> }>;
-}
+// The in-browser transpiler. jco 1.24.x moved transpile logic into the
+// `@bytecodealliance/jco-transpile` package, whose high-level `transpileBytes`
+// statically imports node: builtins (node:child_process / node:os / node:fs)
+// and `terser`, so it cannot load under native ESM in a browser. jco's own
+// `@bytecodealliance/jco/component` browser entry is also unusable in 1.24.3:
+// it imports an `obj/` glue module that the published tarball omits
+// (`files: ["lib","src","types"]`). The one browser-safe artifact jco ships is
+// the vendored, componentized js-component-bindgen — the same `generate()` jco's
+// browser entry called under the hood in earlier releases — which loads its
+// core wasm via `fetch` + `import.meta.url` and only touches node:fs when
+// `fetch` is absent. We call it directly. The specifier is exports-map-gated by
+// jco-transpile (no `./vendor/*` export), so consumers map it via importmap
+// (see examples/) or a bundler alias; tsc is satisfied by src/jco-bindgen.d.ts.
+const JCO_BINDGEN =
+  '@bytecodealliance/jco-transpile/vendor/js-component-bindgen-component.js';
 
 const DEFAULT_NAME = 'component';
 
@@ -23,11 +27,10 @@ export async function transpileToBlobUrl(
   bytes: Uint8Array,
   options: RunComponentOptions,
 ): Promise<string> {
-  // Dynamic import keeps jco out of the initial bundle for callers that may
-  // tree-shake or lazy-load. jco itself is ~5MB, dominated by its wasm-tools.
-  const { transpile } = (await import(
-    '@bytecodealliance/jco/component'
-  )) as unknown as JcoBrowserApi;
+  // Dynamic import keeps the bindgen (~5MB of wasm) out of the initial bundle
+  // for callers that lazy-load.
+  const { generate, $init } = await import(/* @vite-ignore */ JCO_BINDGEN);
+  await $init;
 
   const shimBase = normalizeShimBase(options.shimBase);
   const name = options.name ?? DEFAULT_NAME;
@@ -40,10 +43,15 @@ export async function transpileToBlobUrl(
   const wasiHttpShimUrl = options.wasiHttpShimUrl
     ?? new URL('./shims/wasi-http.js', import.meta.url).href;
 
-  // jco's browser API doesn't apply the CLI's default WASI specifier map, so
-  // we pass one explicitly pointing at absolute browser-shim URLs. The `#*`
+  // We call the low-level bindgen `generate()` directly, so we own the WASI
+  // specifier map outright. This deliberately sidesteps jco-transpile's default
+  // `wasiShim` map, which (as of jco 1.24) over-populates p3-versioned WASI
+  // interfaces onto the Node-only `@bytecodealliance/preview3-shim` — useless
+  // in a browser. Our map routes p3 wasi:http at our browser shim and the rest
+  // at preview2-shim's browser builds; unversioned `wasi:foo/*` keys match
+  // every version the component imports (p2 0.2.x and p3 0.3.0 alike). The `#*`
   // expansion preserves the trailing interface name jco emits per-interface.
-  const result = await transpile(bytes, {
+  const result = generate(bytes, {
     name,
     asyncMode: { tag: 'jspi', val: { imports: [], exports: [] } },
     map: [
@@ -96,8 +104,8 @@ function buildBlobModuleGraph(
     );
   }
 
-  // 3. Entry .js — apply STREAM_TABLES decl, lift patches, bare-import and
-  //    relative-import rewrites. Returns a single blob URL.
+  // 3. Entry .js — apply runtime patches (future/stream drop guard), bare-import
+  //    and relative-import rewrites. Returns a single blob URL.
   const entryFilename = `${name}.js`;
   const entryBytes = fileMap.get(entryFilename);
   if (!entryBytes) {

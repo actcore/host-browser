@@ -1,15 +1,20 @@
-# WIT vendored from act-spec
+# WIT dependencies
 
-`deps/` contains a snapshot of the relevant interfaces from
-[actcore/act-spec](https://github.com/actcore/act-spec). Update with:
+`deps/` is **not** committed — it is fetched from package registries by
+[`wkg`](https://github.com/bytecodealliance/wasm-pkg-tools) and pinned by
+`../wkg.lock`. Populate (or refresh) it with:
 
 ```sh
-pnpm run sync-wit
+npm run sync-wit
 ```
 
-(see `scripts/sync-wit.sh`)
+which runs `wkg wit fetch` against the registries in `../wkg-registry.toml`
+(`act:*` → actcore.dev, `wasi:*` → wasi.dev), resolving the full dependency
+graph of `host-view.wit`. Run this once after cloning, before `npm run build`.
 
 `host-view.wit` is local to this repo — a tiny synthetic world that drives
 `jco types` codegen so TypeScript users get strongly-typed `ToolProvider` /
-`SessionProvider` clients. It is **not** implemented by any wasm component;
-it exists purely for build-time type generation.
+`SessionProvider` clients, and so the WASI shim implementations are typed
+against the same interfaces. It is **not** implemented by any wasm component;
+it exists purely for build-time type generation. Its imports are the single
+source of truth for which packages `wkg` fetches.

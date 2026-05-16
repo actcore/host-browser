@@ -35,7 +35,19 @@ All four major browsers committed to JSPI parity in Interop 2026.
 npm install @actcore/host @bytecodealliance/jco @bytecodealliance/preview2-shim
 ```
 
-`jco` and `preview2-shim` are runtime dependencies; bundle them with your app or load via importmap.
+`jco` (which pulls in `@bytecodealliance/jco-transpile`) and `preview2-shim` are
+runtime dependencies; bundle them with your app or load via importmap.
+
+> **jco 1.24 browser note.** jco 1.24's documented browser entry
+> (`@bytecodealliance/jco/component`) is broken in the published package — the
+> `obj/` glue it imports is gitignored out of the tarball — and
+> `@bytecodealliance/jco-transpile`'s `.` export statically imports node:
+> builtins, so it can't load under native ESM. This package therefore drives the
+> one browser-safe artifact jco ships: the vendored, componentized bindgen at
+> `@bytecodealliance/jco-transpile/vendor/js-component-bindgen-component.js`
+> (the same `generate()` jco's browser entry wraps). That subpath is not in
+> jco-transpile's `exports` map, so map it explicitly in your importmap (see
+> [`examples/basic.html`](examples/basic.html)) or add a bundler resolve alias.
 
 ## Quick start
 
@@ -46,8 +58,9 @@ const wasm = new Uint8Array(await (await fetch('/time.wasm')).arrayBuffer());
 
 const { toolProvider } = await runComponent(wasm, {
   // Where the @bytecodealliance/preview2-shim browser files live. Use a CDN,
-  // your bundler's resolved path, or your dev-server alias.
-  shimBase: 'https://esm.sh/@bytecodealliance/preview2-shim@0.17.0/lib/browser/',
+  // your bundler's resolved path, or your dev-server alias. preview2-shim 0.19
+  // serves its browser build from dist/browser/ (it was lib/browser/ before).
+  shimBase: 'https://esm.sh/@bytecodealliance/preview2-shim@0.19.0/dist/browser/',
 });
 
 const { tools } = await toolProvider.listTools([]);
@@ -68,20 +81,20 @@ if (result.tag === 'immediate') {
 }
 ```
 
-See [`examples/basic.html`](examples/basic.html) for a runnable demo. Build once with `npm run build`, then `npm run example` and open `http://localhost:8765/basic.html`.
+See [`examples/basic.html`](examples/basic.html) for a runnable demo. From a fresh
+clone, `npm run sync-wit` once to fetch the WIT deps (via [`wkg`](https://github.com/bytecodealliance/wasm-pkg-tools); see [`wit/README.md`](wit/README.md)), then `npm run build`. Run the demo with `npm run example` (serves the package root so the importmap's `/node_modules/…` paths resolve) and open `http://localhost:8765/examples/basic.html`.
 
 ## How it works
 
 `runComponent(bytes, options)`:
 
-1. Calls `@bytecodealliance/jco/component`'s in-browser `transpile()` (~250ms for a 1MB component) with `asyncMode: jspi` and an explicit `map` pointing WASI specifiers at `preview2-shim` browser builds.
-2. Patches the resulting JS to:
-   - declare missing `STREAM_TABLES` / `FUTURE_TABLES` (jco 1.19 references them without declaring),
-   - rewrite remaining bare specifiers to absolute URLs (blob: contexts can't see the page's importmap),
-   - bypass `_liftFlatRecord` for `list-tools` and `call-tool` task-return, walking the wasip3-async flat-fields representation directly out of linear memory.
-3. Materialises the patched JS + `.core.wasm` as blob URLs, dynamic-imports the entry module, and wraps the exported `toolProvider` so callers don't have to think about the lift dispatch.
+1. Calls jco's low-level bindgen `generate()` (~250ms for a 1MB component) with `asyncMode: jspi` and an explicit `map` pointing WASI specifiers at `preview2-shim` browser builds (and `wasi:http` p3 at the bundled shim). Driving `generate()` directly — rather than `transpileBytes` — keeps the transpiler node-free and lets us own the WASI map, sidestepping jco 1.24's default map that routes p3 WASI onto the Node-only `preview3-shim`.
+2. Applies a thin patch to the emitted JS:
+   - rewrite bare `preview2-shim` specifiers to absolute URLs (blob: contexts can't see the page's importmap),
+   - short-circuit future/stream drops whose wasm-side end was already transferred (a wit-bindgen Rust quirk on the wasi:http path).
+3. Materialises the patched JS + `.core.wasm` as blob URLs, dynamic-imports the entry module, and returns the exported `toolProvider`.
 
-The patches are stop-gaps for upstream jco issues; once they're fixed there, this package shrinks to a thin glue layer.
+The wasip3-async lift bugs that needed heavy patching under jco 1.19 (STREAM_TABLES/FUTURE_TABLES declarations, `HostFuture`, host-resource lowering, `_liftFlatRecord` task-return, storageLen accounting) are all fixed upstream as of jco 1.24 (bindgen 2.0.3) — jco lifts `list-tools` / `call-tool` results natively. This package is now a thin glue layer.
 
 ## Roadmap
 

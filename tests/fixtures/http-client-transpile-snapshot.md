@@ -1,5 +1,13 @@
 # jco transpile contract — http-client.wasm
 
+> **Note (jco 1.24 / WASI 0.3.0):** captured against jco 1.19. The *shim
+> contract* below (the `client.send` + `Fields`/`Request`/`RequestOptions`/
+> `Response` surface our `wasi-http.js` must provide) is still accurate. The
+> jco-1.19-specific internals it mentions — resource-lower throw-stubs, the
+> `HostFuture` gap, undeclared `STREAM_TABLES`, and the `_liftFlatRecord`
+> task-return mis-decode — are all fixed upstream in jco 1.24 (bindgen 2.0.3)
+> and no longer require host-side patches. Trampoline numbers will differ.
+
 Snapshot of `/tmp/claude/jco-out/http-client.js` import shape and host-trampoline
 obligations. Regenerate via the command in Task 2 of
 `docs/superpowers/plans/2026-05-15-wasi-http-p3-shim.md`.

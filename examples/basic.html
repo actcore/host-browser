@@ -25,18 +25,26 @@
   <h3>Output</h3>
   <pre id="out">Press "Run" to start.</pre>
 
+  <!--
+    jco 1.24.x ships no working browser transpile entry: `@bytecodealliance/jco/component`
+    needs an `obj/` glue dir that's gitignored out of the tarball, and `@bytecodealliance/
+    jco-transpile`'s `.` export statically imports node: builtins. The browser-safe
+    artifact is the vendored, componentized bindgen (the same `generate()` jco's browser
+    entry wraps). preview2-shim 0.19 serves its browser build from dist/browser/.
+  -->
   <script type="importmap">
   {
     "imports": {
       "@actcore/host": "../dist/index.js",
-      "@bytecodealliance/jco/component":            "/node_modules/@bytecodealliance/jco/src/browser.js",
-      "@bytecodealliance/preview2-shim/cli":        "/node_modules/@bytecodealliance/preview2-shim/lib/browser/cli.js",
-      "@bytecodealliance/preview2-shim/clocks":     "/node_modules/@bytecodealliance/preview2-shim/lib/browser/clocks.js",
-      "@bytecodealliance/preview2-shim/io":         "/node_modules/@bytecodealliance/preview2-shim/lib/browser/io.js",
-      "@bytecodealliance/preview2-shim/filesystem": "/node_modules/@bytecodealliance/preview2-shim/lib/browser/filesystem.js",
-      "@bytecodealliance/preview2-shim/http":       "/node_modules/@bytecodealliance/preview2-shim/lib/browser/http.js",
-      "@bytecodealliance/preview2-shim/random":     "/node_modules/@bytecodealliance/preview2-shim/lib/browser/random.js",
-      "@bytecodealliance/preview2-shim/sockets":    "/node_modules/@bytecodealliance/preview2-shim/lib/browser/sockets.js"
+      "@bytecodealliance/jco-transpile/vendor/js-component-bindgen-component.js":
+                                                    "/node_modules/@bytecodealliance/jco-transpile/vendor/js-component-bindgen-component.js",
+      "@bytecodealliance/preview2-shim/cli":        "/node_modules/@bytecodealliance/preview2-shim/dist/browser/cli.js",
+      "@bytecodealliance/preview2-shim/clocks":     "/node_modules/@bytecodealliance/preview2-shim/dist/browser/clocks.js",
+      "@bytecodealliance/preview2-shim/io":         "/node_modules/@bytecodealliance/preview2-shim/dist/browser/io.js",
+      "@bytecodealliance/preview2-shim/filesystem": "/node_modules/@bytecodealliance/preview2-shim/dist/browser/filesystem.js",
+      "@bytecodealliance/preview2-shim/http":       "/node_modules/@bytecodealliance/preview2-shim/dist/browser/http.js",
+      "@bytecodealliance/preview2-shim/random":     "/node_modules/@bytecodealliance/preview2-shim/dist/browser/random.js",
+      "@bytecodealliance/preview2-shim/sockets":    "/node_modules/@bytecodealliance/preview2-shim/dist/browser/sockets.js"
     }
   }
   </script>
@@ -58,7 +66,7 @@
         log('instantiating component...');
         const { toolProvider } = await runComponent(bytes, {
           name: 'demo',
-          shimBase: location.origin + '/node_modules/@bytecodealliance/preview2-shim/lib/browser/',
+          shimBase: location.origin + '/node_modules/@bytecodealliance/preview2-shim/dist/browser/',
         });
         log('  ok', 'ok');
 

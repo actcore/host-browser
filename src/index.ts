@@ -2,9 +2,8 @@
  * @actcore/host — browser host for ACT (Agent Component Tools).
  *
  * Loads ACT wasm components in a browser tab via {@link
- * https://github.com/bytecodealliance/jco | jco}, fixes a few rough edges in
- * jco's wasip3-async lift path, and exposes the component's
- * `act:tools/tool-provider` as a typed JS object.
+ * https://github.com/bytecodealliance/jco | jco}'s in-browser transpiler and
+ * exposes the component's `act:tools/tool-provider` as a typed JS object.
  *
  * @example
  * ```ts

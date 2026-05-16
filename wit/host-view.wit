@@ -15,6 +15,6 @@ world host-view {
   import act:sessions/session-provider@0.1.0;
 
   // (2) WASI capability implementations
-  import wasi:http/types@0.3.0-rc-2026-03-15;
-  import wasi:http/client@0.3.0-rc-2026-03-15;
+  import wasi:http/types@0.3.0;
+  import wasi:http/client@0.3.0;
 }

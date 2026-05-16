@@ -1,6 +1,6 @@
 {
   "name": "@actcore/host",
-  "version": "0.1.0-alpha.1",
+  "version": "0.1.0-alpha.2",
   "description": "Browser host for ACT (Agent Component Tools) — runs signed wasm agent tools in a browser tab",
   "keywords": [
     "act",
@@ -45,13 +45,14 @@
     "clean": "rm -rf dist src/generated",
     "typecheck": "tsc --noEmit",
     "gen-types": "jco types wit --world-name host-view --async-mode jspi --async-wasi-imports -o src/generated",
-    "sync-wit": "bash scripts/sync-wit.sh",
+    "sync-wit": "WKG_CONFIG_FILE=wkg-registry.toml wkg wit fetch --type wit",
     "test": "node --test 'tests/*.test.mjs'",
-    "example": "python3 -m http.server 8765 --directory examples"
+    "example": "python3 -m http.server 8765"
   },
   "dependencies": {
-    "@bytecodealliance/jco": "^1.19.0",
-    "@bytecodealliance/preview2-shim": "^0.17.0"
+    "@bytecodealliance/jco": "^1.24.3",
+    "@bytecodealliance/jco-transpile": "^0.3.3",
+    "@bytecodealliance/preview2-shim": "^0.19.0"
   },
   "devDependencies": {
     "typescript": "^5.6.0",
