@@ -94,6 +94,19 @@ export function applyPatches(src: string): string {
   fnEarlyReturn('function streamDropReadable(ctx, streamEndWaitableIdx) {');
   fnEarlyReturn('function streamDropWritable(ctx, streamEndWaitableIdx) {');
 
+  // Replace jco's "throw" stubs in `_lowerFlatOwn` lowerFn slots with a
+  // no-op returning a sentinel handle 0. jco emits these stubs when it
+  // can't generate a real resource-handle lower for a host-imported
+  // resource (e.g., wasi:io/error stream-error variant) — the throw
+  // crashes the lowering even on success paths that incidentally touch
+  // a resource type the host doesn't expose. Returning 0 gives the wasm
+  // side an invalid handle which it likely never reads (these paths are
+  // typically error-case lowering that won't be exercised).
+  out = out.replaceAll(
+    "lowerFn: () => { throw new Error('missing/invalid resource metadata'); }",
+    "lowerFn: () => 0 /* @actcore/host: throw-stub no-op (Task 8.9) */",
+  );
+
   return out;
 }
 
