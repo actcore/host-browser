@@ -120,6 +120,22 @@ export function applyPatches(src: string): string {
     "lowerFn: (obj) => { if (!obj || typeof obj !== 'object') return 0; if (obj[symbolRscHandle]) return obj[symbolRscHandle]; if (typeof Response !== 'undefined' && obj instanceof Response) { const rep = obj[symbolRscRep] || ++captureCnt5; captureTable5.set(rep, obj); return rscTableCreateOwn(handleTable5, rep); } if (typeof Fields !== 'undefined' && obj instanceof Fields) { const rep = obj[symbolRscRep] || ++captureCnt4; captureTable4.set(rep, obj); return rscTableCreateOwn(handleTable4, rep); } if (typeof Request !== 'undefined' && obj instanceof Request) { const rep = obj[symbolRscRep] || ++captureCnt7; captureTable7.set(rep, obj); return rscTableCreateOwn(handleTable7, rep); } if (typeof RequestOptions !== 'undefined' && obj instanceof RequestOptions) { const rep = obj[symbolRscRep] || ++captureCnt6; captureTable6.set(rep, obj); return rscTableCreateOwn(handleTable6, rep); } return 0; }",
   );
 
+  // PATCH: in async-only `_lowerImport`, jco hardcodes `resultPtr: params[0]`
+  // — but for async imports the wasip3 ABI lowering uses
+  // `(arg0, arg1, ..., result_ptr)` so the result-area pointer is the slot
+  // AFTER all the lifted wit-args. Use `params[paramLiftFns.length]` instead.
+  // Targets ONLY `_lowerImport` (used by trampoline69 = wasi:http/client.send),
+  // not `_lowerImportBackwardsCompat` which sync trampolines use (those write
+  // their result inline in the trampoline body).
+  out = out.replace(
+    "async function _lowerImport(args) {",
+    "async function _lowerImport(args) { args.__paramLiftFnsLen = (args.paramLiftFns||[]).length;",
+  );
+  out = out.replace(
+    "memoryIdx,\n        memory,\n        realloc: getReallocFn(),\n        resultPtr: params[0],\n        lowers: resultLowerFns,\n        stringEncoding,\n      }\n    });\n    task.setReturnMemoryIdx(memoryIdx);",
+    "memoryIdx,\n        memory,\n        realloc: getReallocFn(),\n        resultPtr: params[args.__paramLiftFnsLen ?? 0],\n        lowers: resultLowerFns,\n        stringEncoding,\n      }\n    });\n    task.setReturnMemoryIdx(memoryIdx);",
+  );
+
 
 
 
