@@ -126,12 +126,14 @@ export function applyPatches(src: string): string {
     "(globalThis.__actcoreHdrCheck ||= []).push({handle1, rep2, hasRsc: !!rsc0, rscHasHeaders: rsc0 && 'headers' in rsc0, hdrs: typeof rsc0?.headers, retIsUndef: ret === undefined, ct5Size: captureTable5.size, ht5Snapshot: handleTable5.slice(0, 10)}); throw new TypeError('Resource error: Not a valid \\\"Headers\\\" resource.');",
   );
 
-  // EXPERIMENT: patch the U32 lower path specifically (identified by its
-  // alignment check) to also write at ptr-4 — covering payloadOffset
-  // mismatch between jco's metadata (offset 8) and wit-bindgen's expectation.
-  out = out.replace(
-    "_requireValidNumericPrimitive.bind('u32', ctx.vals[0]);\n  new DataView(ctx.memory.buffer).setUint32(ctx.storagePtr, ctx.vals[0], true);",
-    "_requireValidNumericPrimitive.bind('u32', ctx.vals[0]);\n  { const _dv = new DataView(ctx.memory.buffer); _dv.setUint32(ctx.storagePtr, ctx.vals[0], true); if (ctx.storagePtr >= 4) _dv.setUint32(ctx.storagePtr - 4, ctx.vals[0], true); (globalThis.__actcoreU32 ||= []).push({ptr: ctx.storagePtr, val: ctx.vals[0]}); }",
+  // PATCH: jco 1.19 sets `resultPtr: params[0]` in _lowerImport — but for
+  // async-lower imports the wit-bindgen Rust ABI passes (other-args..., resultPtr)
+  // with the result-area pointer in the LAST slot. Using params[0] writes the
+  // result to memory at the first arg's numeric value (e.g., a request handle
+  // = small int = junk address). Patch to use the LAST param.
+  out = out.replaceAll(
+    "resultPtr: params[0],",
+    "resultPtr: params[params.length - 1],",
   );
 
 
