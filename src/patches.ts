@@ -120,6 +120,23 @@ export function applyPatches(src: string): string {
     "lowerFn: (obj) => { if (!obj || typeof obj !== 'object') return 0; if (obj[symbolRscHandle]) return obj[symbolRscHandle]; if (typeof Response !== 'undefined' && obj instanceof Response) { const rep = obj[symbolRscRep] || ++captureCnt5; captureTable5.set(rep, obj); return rscTableCreateOwn(handleTable5, rep); } if (typeof Fields !== 'undefined' && obj instanceof Fields) { const rep = obj[symbolRscRep] || ++captureCnt4; captureTable4.set(rep, obj); return rscTableCreateOwn(handleTable4, rep); } if (typeof Request !== 'undefined' && obj instanceof Request) { const rep = obj[symbolRscRep] || ++captureCnt7; captureTable7.set(rep, obj); return rscTableCreateOwn(handleTable7, rep); } if (typeof RequestOptions !== 'undefined' && obj instanceof RequestOptions) { const rep = obj[symbolRscRep] || ++captureCnt6; captureTable6.set(rep, obj); return rscTableCreateOwn(handleTable6, rep); } return 0; }",
   );
 
+  // PATCH: never recycle slots in rscTableCreateOwn. wasip3-async assigns
+  // wasm-side resource handles via a monotonic counter that's independent
+  // of the host's handle-table free-list. Whenever the host frees and reuses
+  // a slot (e.g. after the previous task dropped its Response), JS thinks
+  // it returned the old slot index while the wasm internally moved on to
+  // the next sequence number — they diverge silently and the next host
+  // method call gets an out-of-range handle.
+  //
+  // Forcing every allocation to push fresh slots keeps slotIdx === rep ===
+  // wasm-side handle, so handleTable[handle<<1 + 1] always decodes the rep
+  // the wasm expects. The memory cost is bounded by the number of resources
+  // allocated per page-load, which is small for tool calls.
+  out = out.replace(
+    'function rscTableCreateOwn(table, rep) {\n    const free = table[0] & ~T_FLAG;',
+    'function rscTableCreateOwn(table, rep) {\n    /* @actcore/host: always push (no slot recycling) — wasm-side handle counter is monotonic */\n    table.push(0);\n    table.push(rep | T_FLAG);\n    return (table.length >> 1) - 1;\n  }\n  function _origRscTableCreateOwn_unused(table, rep) {\n    const free = table[0] & ~T_FLAG;',
+  );
+
   // PATCH: force fresh resource-handle registration on every call.
   //
   // jco emits a stale-rep-reuse pattern across many trampoline lowerings:
@@ -198,19 +215,6 @@ export function applyPatches(src: string): string {
 
 
 
-
-  // PATCH: trampoline inline body's `variantN_1 = handleM` is dead code in
-  // jco's emitted output — the wasm-side reads its result handle from memory
-  // at the result-area pointer (last arg). But subtask.onResolve doesn't
-  // always wire through to our resultLowerFns lowerFn, so the memory write
-  // never happens, and the wasm gets garbage instead of handleM. Write the
-  // discriminant + handle directly at the result-area pointer from the inline
-  // body. The trampoline number (N) and handle number (M) vary across jco
-  // versions, so match the pattern by structure rather than by literal index.
-  out = out.replace(
-    /(variant(\d+)_0 = 0;\s*\n\s*variant\2_1 = (handle\d+);)/g,
-    "$1\n    /* @actcore/host: inline-write the lowered result to wasm memory at the result-area pointer */ { const _args = arguments; const _resPtr = _args[_args.length - 1]; if (typeof _resPtr === 'number' && memory0) { const _dv = new DataView(memory0.buffer); _dv.setUint8(_resPtr + 0, 0, true); _dv.setUint32(_resPtr + 4, $3, true); _dv.setUint32(_resPtr + 8, $3, true); }}",
-  );
 
   return out;
 }
