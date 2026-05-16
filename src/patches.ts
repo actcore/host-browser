@@ -120,6 +120,17 @@ export function applyPatches(src: string): string {
     "lowerFn: (obj) => { if (!obj || typeof obj !== 'object') return 0; if (obj[symbolRscHandle]) return obj[symbolRscHandle]; if (typeof Response !== 'undefined' && obj instanceof Response) { const rep = obj[symbolRscRep] || ++captureCnt5; captureTable5.set(rep, obj); return rscTableCreateOwn(handleTable5, rep); } if (typeof Fields !== 'undefined' && obj instanceof Fields) { const rep = obj[symbolRscRep] || ++captureCnt4; captureTable4.set(rep, obj); return rscTableCreateOwn(handleTable4, rep); } if (typeof Request !== 'undefined' && obj instanceof Request) { const rep = obj[symbolRscRep] || ++captureCnt7; captureTable7.set(rep, obj); return rscTableCreateOwn(handleTable7, rep); } if (typeof RequestOptions !== 'undefined' && obj instanceof RequestOptions) { const rep = obj[symbolRscRep] || ++captureCnt6; captureTable6.set(rep, obj); return rscTableCreateOwn(handleTable6, rep); } return 0; }",
   );
 
+  // PATCH: inline registration of the Response handle in trampoline69's
+  // ok-branch checks `e[symbolRscHandle]` and reuses it if truthy. But after
+  // a previous call's resource-borrow cleanup (`rsc[symbolRscHandle] = undefined`),
+  // some path sets it to a stale value on subsequent calls — even though `e`
+  // is supposedly a fresh Response from our shim's send(). Force a fresh
+  // registration each call by ignoring the cached symbolRscHandle.
+  out = out.replace(
+    "if (!(e instanceof Response)) {\n      throw new TypeError('Resource error: Not a valid \\\"Response\\\" resource.');\n    }\n    var handle3 = e[symbolRscHandle];",
+    "if (!(e instanceof Response)) {\n      throw new TypeError('Resource error: Not a valid \\\"Response\\\" resource.');\n    }\n    /* @actcore/host: force fresh registration (Task 8.9) */\n    delete e[symbolRscHandle];\n    delete e[symbolRscRep];\n    var handle3 = undefined;",
+  );
+
   // PATCH: StreamWritableEnd.write hardcodes count=1 even when called with
   // a multi-element array of values from genHostInjectFn. The buffer is then
   // created as 1-element capacity but `data: v` is the FULL array, so the
@@ -168,20 +179,6 @@ export function applyPatches(src: string): string {
 
 
 
-
-  // DIAGNOSTIC
-  out = out.replace(
-    "const _trampoline6 = function(arg0) {",
-    "const _trampoline6 = function(arg0) { (globalThis.__act_t6=globalThis.__act_t6||[]).push({arg0, ct5Size: captureTable5.size, captureCnt5, ht5: handleTable5.slice(0,12)});",
-  );
-  out = out.replaceAll(
-    "lowerFn: () => { throw new Error('xxxignore'); }",
-    "// noop",
-  );
-  out = out.replace(
-    "variant42_1 = handle3;",
-    "(globalThis.__act_t69=globalThis.__act_t69||[]).push({handle3, captureCnt5, ct5Size: captureTable5.size}); variant42_1 = handle3;",
-  );
 
   return out;
 }
