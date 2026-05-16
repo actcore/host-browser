@@ -120,6 +120,16 @@ export function applyPatches(src: string): string {
     "lowerFn: (obj) => { if (!obj || typeof obj !== 'object') return 0; if (obj[symbolRscHandle]) return obj[symbolRscHandle]; if (typeof Response !== 'undefined' && obj instanceof Response) { const rep = obj[symbolRscRep] || ++captureCnt5; captureTable5.set(rep, obj); return rscTableCreateOwn(handleTable5, rep); } if (typeof Fields !== 'undefined' && obj instanceof Fields) { const rep = obj[symbolRscRep] || ++captureCnt4; captureTable4.set(rep, obj); return rscTableCreateOwn(handleTable4, rep); } if (typeof Request !== 'undefined' && obj instanceof Request) { const rep = obj[symbolRscRep] || ++captureCnt7; captureTable7.set(rep, obj); return rscTableCreateOwn(handleTable7, rep); } if (typeof RequestOptions !== 'undefined' && obj instanceof RequestOptions) { const rep = obj[symbolRscRep] || ++captureCnt6; captureTable6.set(rep, obj); return rscTableCreateOwn(handleTable6, rep); } return 0; }",
   );
 
+  // PATCH: StreamWritableEnd.write hardcodes count=1 even when called with
+  // a multi-element array of values from genHostInjectFn. The buffer is then
+  // created as 1-element capacity but `data: v` is the FULL array, so the
+  // wasm-side read gets only the first element. Use the array length instead.
+  // Anchor: the `data: v,` line is unique to the write path (read uses `data: []`).
+  out = out.replace(
+    "const count = 1;\n    if (this.#elemMeta.stringEncoding === undefined) {",
+    "const count = Array.isArray(v) ? v.length : 1;\n    if (this.#elemMeta.stringEncoding === undefined) {",
+  );
+
   // PATCH: _liftFlatU8/U16/U32 throw "insufficient storage" when ctx.storageLen
   // is 0 even though storagePtr is valid. This happens inside variant/option
   // lifts where storageLen tracking goes wrong (jco bug — storageLen should
