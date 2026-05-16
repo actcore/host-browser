@@ -102,23 +102,24 @@ export function applyPatches(src: string): string {
   // a resource type the host doesn't expose. Returning 0 gives the wasm
   // side an invalid handle which it likely never reads (these paths are
   // typically error-case lowering that won't be exercised).
+  // jco's `_lowerImport` calls these lowerFns to convert host-side resource
+  // instances back into wasm-side handles. jco emits throw-stubs when it
+  // couldn't auto-register a resource type — the wasm then receives no valid
+  // handle and crashes downstream (`Resource error: Not a valid "X" resource`).
+  // Replace with a per-class registrar that uses the matching captureTable.
+  // The replacement runs inside $init so it has access to captureTableN,
+  // captureCntN, handleTableN, symbolRscHandle, symbolRscRep, rscTableCreateOwn.
+  // Resource → table mapping observed via grep of jco's emitted code:
+  //   Error$1 → captureTable1/handleTable1
+  //   Fields  → captureTable4/handleTable4
+  //   Response → captureTable5/handleTable5
+  //   RequestOptions → captureTable6/handleTable6
+  //   Request → captureTable7/handleTable7
   out = out.replaceAll(
     "lowerFn: () => { throw new Error('missing/invalid resource metadata'); }",
-    "lowerFn: () => 0 /* @actcore/host: throw-stub no-op (Task 8.9) */",
+    "lowerFn: (obj) => { if (!obj || typeof obj !== 'object') return 0; if (obj[symbolRscHandle]) return obj[symbolRscHandle]; if (typeof Response !== 'undefined' && obj instanceof Response) { const rep = obj[symbolRscRep] || ++captureCnt5; captureTable5.set(rep, obj); return rscTableCreateOwn(handleTable5, rep); } if (typeof Fields !== 'undefined' && obj instanceof Fields) { const rep = obj[symbolRscRep] || ++captureCnt4; captureTable4.set(rep, obj); return rscTableCreateOwn(handleTable4, rep); } if (typeof Request !== 'undefined' && obj instanceof Request) { const rep = obj[symbolRscRep] || ++captureCnt7; captureTable7.set(rep, obj); return rscTableCreateOwn(handleTable7, rep); } if (typeof RequestOptions !== 'undefined' && obj instanceof RequestOptions) { const rep = obj[symbolRscRep] || ++captureCnt6; captureTable6.set(rep, obj); return rscTableCreateOwn(handleTable6, rep); } return 0; }",
   );
 
-  // DIAGNOSTIC: log when Headers resource check fails so we can see what
-  // ret actually is and which Fields class we're comparing against.
-  out = out.replaceAll(
-    "throw new TypeError('Resource error: Not a valid \\\"Headers\\\" resource.');",
-    "globalThis.__actcoreHdrDbg = globalThis.__actcoreHdrDbg || []; globalThis.__actcoreHdrDbg.push({ retType: typeof ret, retIsNull: ret === null, retIsUndef: ret === undefined, retCtor: ret?.constructor?.name, rscCtor: rsc0?.constructor?.name, rscHasHeaders: rsc0 && 'headers' in rsc0, rscHeadersType: rsc0?.headers === null ? 'null' : typeof rsc0?.headers, handle1Val: handle1, rep2Val: rep2 }); throw new TypeError('Resource error: Not a valid \\\"Headers\\\" resource.');",
-  );
-
-  // DIAGNOSTIC: capture handle3 in send's ok-branch to see what gets returned.
-  out = out.replaceAll(
-    "variant42_1 = handle3;",
-    "globalThis.__actcoreSendDbg = (globalThis.__actcoreSendDbg||[]); globalThis.__actcoreSendDbg.push({ at: 'send-ok', handle3, hasSymHandle: !!e[symbolRscHandle], symHandle: e[symbolRscHandle], symRep: e[symbolRscRep], captureCnt5_after: captureCnt5, hdrsType: typeof e.headers }); variant42_1 = handle3;",
-  );
 
   return out;
 }
