@@ -79,6 +79,21 @@ export function applyPatches(src: string): string {
     out = out.replace(liftAnchor, customLiftSource() + '\n    ' + liftAnchor);
   }
 
+  // wit-bindgen Rust's future destructor emits `future-drop-{readable,writable}(idx)`
+  // even after the future end has been transferred (e.g., into request.new
+  // trailers param), at which point the wasm-side handle is 0. jco's
+  // futureDropReadable/futureDropWritable then crash on the missing handle.
+  // Short-circuit drops with idx=0 — the host already owns the future (or
+  // the end never existed), nothing to drop on the wasm side. Same for streams.
+  const fnEarlyReturn = (anchor: string) => {
+    if (!out.includes(anchor)) return;
+    out = out.replace(anchor, anchor + '\n    if (!arguments[1]) return;');
+  };
+  fnEarlyReturn('function futureDropReadable(ctx, futureEndWaitableIdx) {');
+  fnEarlyReturn('function futureDropWritable(ctx, futureEndWaitableIdx) {');
+  fnEarlyReturn('function streamDropReadable(ctx, streamEndWaitableIdx) {');
+  fnEarlyReturn('function streamDropWritable(ctx, streamEndWaitableIdx) {');
+
   return out;
 }
 
