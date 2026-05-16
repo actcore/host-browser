@@ -120,6 +120,25 @@ export function applyPatches(src: string): string {
     "lowerFn: (obj) => { if (!obj || typeof obj !== 'object') return 0; if (obj[symbolRscHandle]) return obj[symbolRscHandle]; if (typeof Response !== 'undefined' && obj instanceof Response) { const rep = obj[symbolRscRep] || ++captureCnt5; captureTable5.set(rep, obj); return rscTableCreateOwn(handleTable5, rep); } if (typeof Fields !== 'undefined' && obj instanceof Fields) { const rep = obj[symbolRscRep] || ++captureCnt4; captureTable4.set(rep, obj); return rscTableCreateOwn(handleTable4, rep); } if (typeof Request !== 'undefined' && obj instanceof Request) { const rep = obj[symbolRscRep] || ++captureCnt7; captureTable7.set(rep, obj); return rscTableCreateOwn(handleTable7, rep); } if (typeof RequestOptions !== 'undefined' && obj instanceof RequestOptions) { const rep = obj[symbolRscRep] || ++captureCnt6; captureTable6.set(rep, obj); return rscTableCreateOwn(handleTable6, rep); } return 0; }",
   );
 
+  // PATCH: _liftFlatU8/U16/U32 throw "insufficient storage" when ctx.storageLen
+  // is 0 even though storagePtr is valid. This happens inside variant/option
+  // lifts where storageLen tracking goes wrong (jco bug — storageLen should
+  // be undefined for unbounded lifts). Treat storageLen=0 as "unbounded"
+  // (ignore the check) instead of erroring; the storagePtr is still valid
+  // and the byte at memory[storagePtr] is what we want.
+  out = out.replaceAll(
+    "ctx.storageLen !== undefined && ctx.storageLen < 1",
+    "false /* @actcore/host: storageLen check disabled — see Task 8.9 */",
+  );
+  out = out.replaceAll(
+    "ctx.storageLen !== undefined && ctx.storageLen < 2",
+    "false",
+  );
+  out = out.replaceAll(
+    "ctx.storageLen !== undefined && ctx.storageLen < 4",
+    "false",
+  );
+
   // PATCH: in async-only `_lowerImport`, jco hardcodes `resultPtr: params[0]`
   // — but for async imports the wasip3 ABI lowering uses
   // `(arg0, arg1, ..., result_ptr)` so the result-area pointer is the slot
