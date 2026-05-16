@@ -121,14 +121,14 @@ export function applyPatches(src: string): string {
   );
 
   // PATCH: inline registration of the Response handle in trampoline69's
-  // ok-branch checks `e[symbolRscHandle]` and reuses it if truthy. But after
-  // a previous call's resource-borrow cleanup (`rsc[symbolRscHandle] = undefined`),
-  // some path sets it to a stale value on subsequent calls — even though `e`
-  // is supposedly a fresh Response from our shim's send(). Force a fresh
-  // registration each call by ignoring the cached symbolRscHandle.
+  // ok-branch. The original `var handle3 = e[symbolRscHandle]` followed by
+  // `const rep = e[symbolRscRep] || ++captureCnt5` reuses cached values from
+  // a previous call (jco defines these as non-configurable so `delete` is a
+  // no-op, and the previous call's stale rep remains on `e`). Bypass BOTH
+  // cached values: force handle3=undefined and rep=++captureCnt5 directly.
   out = out.replace(
-    "if (!(e instanceof Response)) {\n      throw new TypeError('Resource error: Not a valid \\\"Response\\\" resource.');\n    }\n    var handle3 = e[symbolRscHandle];",
-    "if (!(e instanceof Response)) {\n      throw new TypeError('Resource error: Not a valid \\\"Response\\\" resource.');\n    }\n    /* @actcore/host: force fresh registration (Task 8.9) */\n    delete e[symbolRscHandle];\n    delete e[symbolRscRep];\n    var handle3 = undefined;",
+    "if (!(e instanceof Response)) {\n      throw new TypeError('Resource error: Not a valid \\\"Response\\\" resource.');\n    }\n    var handle3 = e[symbolRscHandle];\n    if (!handle3) {\n      const rep = e[symbolRscRep] || ++captureCnt5;",
+    "if (!(e instanceof Response)) {\n      throw new TypeError('Resource error: Not a valid \\\"Response\\\" resource.');\n    }\n    /* @actcore/host: force fresh registration each call (Task 8.9) */\n    var handle3 = undefined;\n    if (!handle3) {\n      const rep = ++captureCnt5;",
   );
 
   // PATCH: StreamWritableEnd.write hardcodes count=1 even when called with
