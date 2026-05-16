@@ -8,7 +8,18 @@ import { customLiftSource } from './lift.js';
  * 1. `STREAM_TABLES` is referenced unconditionally but never declared by jco
  *    1.19 for wasip3-async components. Inject the declarations near the top.
  *
- * 2. Replace the body of `taskReturn`'s "lift results from memory" block with
+ * 2. `HostFuture` class + `FUTURES` rep-table are referenced (at
+ *    `futureNewFromLift`) but never emitted by jco 1.19 — components importing
+ *    wasi:http p3 hit this via `request.new(headers, body, trailers, options)`
+ *    where `trailers` is a `future<...>`. Inject minimal stubs near the top:
+ *    a HostFuture class that holds the args and exposes the methods jco's
+ *    machinery calls (setRep, setGlobalFutureMapRep, createUserFuture, etc.),
+ *    plus a FUTURES table with the small RepTable surface jco uses (insert,
+ *    get, remove). The user-facing future is a thenable that resolves to
+ *    undefined — sufficient for any code path that just constructs a future
+ *    and never reads it (the typical trailers case).
+ *
+ * 3. Replace the body of `taskReturn`'s "lift results from memory" block with
  *    custom code that handles wasip3-async task-return — see `lift.ts`. jco's
  *    `_liftFlatRecord(useDirectParams: true)` assumes `params[0]` is a struct
  *    pointer and reads fields from memory; the actual wasip3-async ABI passes
@@ -26,6 +37,38 @@ export function applyPatches(src: string): string {
         'const instantiateCore = WebAssembly.instantiate;',
         'const STREAM_TABLES = {};',
         'const FUTURE_TABLES = {};',
+      ].join('\n'),
+    );
+  }
+
+  if (out.includes('new HostFuture(') && !/class\s+HostFuture/.test(out)) {
+    out = out.replace(
+      'const instantiateCore = WebAssembly.instantiate;',
+      [
+        'const instantiateCore = WebAssembly.instantiate;',
+        '// @actcore/host: HostFuture polyfill — jco 1.19 references `new HostFuture({...})`',
+        '// at futureNewFromLift but never emits the class. FUTURES is already declared',
+        '// in the entry module via `new RepTable(...)`, so only the class needs stubbing.',
+        'class HostFuture {',
+        '  constructor(args) { this._args = args || {}; this._rep = null; this._userFuture = null; }',
+        '  setRep(rep) { this._rep = rep; }',
+        '  setGlobalFutureMapRep(rep) { this._rep = rep; }',
+        '  getFutureEndWaitableIdx() { return this._args.futureEndWaitableIdx; }',
+        '  getRep() { return this._rep; }',
+        '  createUserFuture() {',
+        '    if (this._userFuture) return this._userFuture;',
+        '    // Thenable resolving to undefined. Sufficient for trailers-style',
+        '    // futures that the host never reads from (the typical case for',
+        '    // wasi:http request.new trailers parameter).',
+        '    const p = Promise.resolve(undefined);',
+        '    this._userFuture = {',
+        '      then: p.then.bind(p),',
+        '      catch: p.catch.bind(p),',
+        '      finally: p.finally.bind(p),',
+        '    };',
+        '    return this._userFuture;',
+        '  }',
+        '}',
       ].join('\n'),
     );
   }
