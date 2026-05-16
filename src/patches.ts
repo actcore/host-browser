@@ -180,14 +180,16 @@ export function applyPatches(src: string): string {
 
 
 
-  // DIAGNOSTIC (temporary): variant42 entry
+  // PATCH: trampoline69 inline body's `variant42_1 = handle3` is dead code in
+  // jco's emitted output — the wasm-side reads its result handle from memory
+  // at the result-area pointer (last arg). But subtask.onResolve doesn't
+  // always wire through to our resultLowerFns lowerFn, so the memory write
+  // never happens, and the wasm gets garbage instead of handle3. Write the
+  // discriminant + handle directly at the result-area pointer from the inline
+  // body (mirrors what sync trampolines like trampoline73 already do).
   out = out.replace(
-    "switch (variant42.tag) {\n  case 'ok': {",
-    "(globalThis.__act_v42=globalThis.__act_v42||[]).push({tag: variant42?.tag, val_ctor: variant42?.val?.constructor?.name}); switch (variant42.tag) {\n  case 'ok': {",
-  );
-  out = out.replace(
-    "const _trampoline6 = function(arg0) {",
-    "const _trampoline6 = function(arg0) { (globalThis.__act_t6=globalThis.__act_t6||[]).push({arg0, ct5Size: captureTable5.size, captureCnt5});",
+    "variant42_0 = 0;\n    variant42_1 = handle3;",
+    "variant42_0 = 0;\n    variant42_1 = handle3;\n    /* @actcore/host: inline-write the lowered result to wasm memory at the result-area pointer (Task 8.9). jco's emitted code computes variant42_N flat values but never writes them; subtask.onResolve's lowers[0] path also doesn't always fire. */ { const _args = arguments; const _resPtr = _args[_args.length - 1]; if (typeof _resPtr === 'number' && memory0) { const _dv = new DataView(memory0.buffer); _dv.setUint8(_resPtr + 0, 0, true); _dv.setUint32(_resPtr + 4, handle3, true); _dv.setUint32(_resPtr + 8, handle3, true); }}",
   );
 
   return out;
