@@ -126,10 +126,12 @@ export function applyPatches(src: string): string {
     "(globalThis.__actcoreHdrCheck ||= []).push({handle1, rep2, hasRsc: !!rsc0, rscHasHeaders: rsc0 && 'headers' in rsc0, hdrs: typeof rsc0?.headers, retIsUndef: ret === undefined, ct5Size: captureTable5.size, ht5Snapshot: handleTable5.slice(0, 10)}); throw new TypeError('Resource error: Not a valid \\\"Headers\\\" resource.');",
   );
 
-  // DIAGNOSTIC: trace all setUint32 writes via ctx.memory.
-  out = out.replaceAll(
-    "new DataView(ctx.memory.buffer).setUint32(ctx.storagePtr, ctx.vals[0], true);",
-    "{ const _dv = new DataView(ctx.memory.buffer); _dv.setUint32(ctx.storagePtr, ctx.vals[0], true); (globalThis.__actcoreU32 ||= []).push({ptr: ctx.storagePtr, val: ctx.vals[0], stack: new Error().stack?.split('\\n').slice(1, 4).join(' | ')}); }",
+  // EXPERIMENT: patch the U32 lower path specifically (identified by its
+  // alignment check) to also write at ptr-4 — covering payloadOffset
+  // mismatch between jco's metadata (offset 8) and wit-bindgen's expectation.
+  out = out.replace(
+    "_requireValidNumericPrimitive.bind('u32', ctx.vals[0]);\n  new DataView(ctx.memory.buffer).setUint32(ctx.storagePtr, ctx.vals[0], true);",
+    "_requireValidNumericPrimitive.bind('u32', ctx.vals[0]);\n  { const _dv = new DataView(ctx.memory.buffer); _dv.setUint32(ctx.storagePtr, ctx.vals[0], true); if (ctx.storagePtr >= 4) _dv.setUint32(ctx.storagePtr - 4, ctx.vals[0], true); (globalThis.__actcoreU32 ||= []).push({ptr: ctx.storagePtr, val: ctx.vals[0]}); }",
   );
 
 
