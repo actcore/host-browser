@@ -11,11 +11,15 @@ import type { RunComponentOptions } from './host-api.js';
 // the vendored, componentized js-component-bindgen — the same `generate()` jco's
 // browser entry called under the hood in earlier releases — which loads its
 // core wasm via `fetch` + `import.meta.url` and only touches node:fs when
-// `fetch` is absent. We call it directly. The specifier is exports-map-gated by
-// jco-transpile (no `./vendor/*` export), so consumers map it via importmap
-// (see examples/) or a bundler alias; tsc is satisfied by src/jco-bindgen.d.ts.
-const JCO_BINDGEN =
-  '@bytecodealliance/jco-transpile/vendor/js-component-bindgen-component.js';
+// `fetch` is absent. We call it directly (see the `import()` below). The
+// specifier is exports-map-gated by jco-transpile (no `./vendor/*` export), so
+// consumers map it via importmap (see examples/) or a bundler alias; tsc is
+// satisfied by src/jco-bindgen.d.ts.
+//
+// The import below is written as a bare literal (no `@vite-ignore`) on purpose:
+// bundlers must be allowed to resolve + bundle it (via the consumer's alias),
+// and a no-bundler browser resolves the same literal through its importmap.
+// `@vite-ignore` would suppress both, leaving an unresolvable runtime specifier.
 
 const DEFAULT_NAME = 'component';
 
@@ -29,7 +33,9 @@ export async function transpileToBlobUrl(
 ): Promise<string> {
   // Dynamic import keeps the bindgen (~5MB of wasm) out of the initial bundle
   // for callers that lazy-load.
-  const { generate, $init } = await import(/* @vite-ignore */ JCO_BINDGEN);
+  const { generate, $init } = await import(
+    '@bytecodealliance/jco-transpile/vendor/js-component-bindgen-component.js'
+  );
   await $init;
 
   const shimBase = normalizeShimBase(options.shimBase);
