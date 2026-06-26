@@ -14,7 +14,7 @@ ACT components are sandboxed wasm modules signed by their author and distributed
 
 ## Status
 
-Experimental (`0.1.0-alpha`). The runtime works end-to-end for `act:tools/tool-provider@0.1.0`. Streaming results, OCI pull, and Sigstore verification are scheduled for follow-up versions.
+Experimental (`0.1.0-alpha`). The runtime works end-to-end for `act:tools/tool-provider@0.2.0`. Streaming results, OCI pull, and Sigstore verification are scheduled for follow-up versions.
 
 ## Browser support
 

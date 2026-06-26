@@ -11,8 +11,8 @@ package act:host-view@0.0.0;
 
 world host-view {
   // (1) Component-export typings
-  import act:tools/tool-provider@0.1.0;
-  import act:sessions/session-provider@0.1.0;
+  import act:tools/tool-provider@0.2.0;
+  import act:sessions/session-provider@0.2.0;
 
   // (2) WASI capability implementations
   import wasi:http/types@0.3.0;

@@ -23,10 +23,12 @@ export type {
   ToolEvent,
   ToolEventContent,
   ToolEventError,
+  ListToolsResponse,
+} from './generated/interfaces/act-tools-types.js';
+export type {
   ToolResult,
   ToolResultImmediate,
   ToolResultStreaming,
-  ListToolsResponse,
 } from './generated/interfaces/act-tools-tool-provider.js';
 export type {
   Cbor,
@@ -38,7 +40,7 @@ export type {
 } from './generated/interfaces/act-core-types.js';
 export type {
   Session,
-} from './generated/interfaces/act-sessions-session-provider.js';
+} from './generated/interfaces/act-sessions-types.js';
 
 export type { RunComponentOptions, ComponentInstance, ToolProvider } from './host-api.js';
 export { runComponent } from './host-api.js';

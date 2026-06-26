@@ -7,7 +7,7 @@ import type { Cbor, Metadata } from './generated/interfaces/act-core-types.js';
 import { transpileToBlobUrl } from './transpile.js';
 
 /**
- * Typed mirror of the `act:tools/tool-provider@0.1.0` interface as exposed
+ * Typed mirror of the `act:tools/tool-provider@0.2.0` interface as exposed
  * by jco-transpiled modules. Matches the generated types in
  * `./generated/interfaces/act-tools-tool-provider.js`.
  */
@@ -17,7 +17,7 @@ export interface ToolProvider {
 }
 
 export interface ComponentInstance {
-  /** `act:tools/tool-provider@0.1.0` if the component exports it. */
+  /** `act:tools/tool-provider@0.2.0` if the component exports it. */
   toolProvider: ToolProvider;
 }
 
@@ -52,7 +52,7 @@ export interface RunComponentOptions {
  *   in Firefox Nightly 152+, and in Safari Tech Preview 243+. Tracking
  *   issue: Interop 2026 focus area #10.
  * - The component must be a `wasip3`-style ACT component packed via
- *   `act-build pack` and exporting `act:tools/tool-provider@0.1.0`.
+ *   `act-build pack` and exporting `act:tools/tool-provider@0.2.0`.
  */
 export async function runComponent(
   bytes: Uint8Array,
@@ -77,7 +77,7 @@ export async function runComponent(
 
   if (!mod.toolProvider) {
     throw new Error(
-      'Component does not export act:tools/tool-provider@0.1.0',
+      'Component does not export act:tools/tool-provider@0.2.0',
     );
   }
 
