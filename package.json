@@ -41,7 +41,8 @@
     "node": ">=20"
   },
   "scripts": {
-    "build": "npm run gen-types && tsc",
+    "build": "npm run gen-version && npm run gen-types && tsc",
+    "gen-version": "node scripts/gen-version.mjs",
     "clean": "rm -rf dist src/generated",
     "typecheck": "tsc --noEmit",
     "gen-types": "jco types wit --world-name host-view --async-mode jspi --async-wasi-imports -o src/generated",

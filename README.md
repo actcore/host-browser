@@ -88,20 +88,28 @@ clone, `npm run sync-wit` once to fetch the WIT deps (via [`wkg`](https://github
 
 `runComponent(bytes, options)`:
 
-1. Calls jco's low-level bindgen `generate()` (~250ms for a 1MB component) with `asyncMode: jspi` and an explicit `map` pointing WASI specifiers at `preview2-shim` browser builds (and `wasi:http` p3 at the bundled shim). Driving `generate()` directly — rather than `transpileBytes` — keeps the transpiler node-free and lets us own the WASI map, sidestepping jco 1.24's default map that routes p3 WASI onto the Node-only `preview3-shim`.
-2. Applies a thin patch to the emitted JS:
+1. Calls jco's low-level bindgen `generate()` with `asyncMode: jspi` and an explicit `map` pointing WASI specifiers at `preview2-shim` browser builds (and `wasi:http` p3 at the bundled shim). Driving `generate()` directly — rather than `transpileBytes` — keeps the transpiler node-free and lets us own the WASI map, sidestepping jco 1.24's default map that routes p3 WASI onto the Node-only `preview3-shim`. `generate()` is a single synchronous wasm call that blocks for ~250ms on a 1MB component but several **seconds** on a large one (e.g. a 100 MB+ Python component), so it runs in a **Web Worker** — the page stays responsive while a big component transpiles. If a worker can't be created or loaded (e.g. an importmap-only page, where workers can't resolve the bindgen specifier), it transparently falls back to a main-thread transpile.
+2. **Caches** the transpile output in IndexedDB, keyed by `@actcore/host`'s version and the SHA-256 of the component bytes. A second load of the same component skips `generate()` entirely (no worker, no multi-second wait). Bumping the package version invalidates the cache, since a new release may ship a different transpiler. Pass `cache: false` to bypass it; call `clearTranspileCache()` to wipe it. The cache silently disables itself where IndexedDB / `crypto.subtle` is unavailable.
+3. Applies a thin patch to the emitted JS:
    - rewrite bare `preview2-shim` specifiers to absolute URLs (blob: contexts can't see the page's importmap),
    - short-circuit future/stream drops whose wasm-side end was already transferred (a wit-bindgen Rust quirk on the wasi:http path).
-3. Materialises the patched JS + `.core.wasm` as blob URLs, dynamic-imports the entry module, and returns the exported `toolProvider`.
+4. Materialises the patched JS + `.core.wasm` as blob URLs, dynamic-imports the entry module, and returns the exported `toolProvider`.
 
 The wasip3-async lift bugs that needed heavy patching under jco 1.19 (STREAM_TABLES/FUTURE_TABLES declarations, `HostFuture`, host-resource lowering, `_liftFlatRecord` task-return, storageLen accounting) are all fixed upstream as of jco 1.24 (bindgen 2.0.3) — jco lifts `list-tools` / `call-tool` results natively. This package is now a thin glue layer.
+
+> **Bundler note (Web Worker).** The transpile worker is created with
+> `new Worker(new URL('./transpile.worker.js', import.meta.url), { type: 'module' })`
+> and dynamic-imports the bindgen, so it code-splits. Configure your bundler to
+> emit workers as ES modules — in Vite that's `worker: { format: 'es' }` (the
+> default `iife` rejects code-splitting workers). No config is needed for
+> importmap / no-bundler pages: they hit the main-thread fallback.
 
 ## Roadmap
 
 - v0.2 — OCI pull and Sigstore (cosign) signature verification, via a shared `act-oci-verify` Rust crate compiled to both native (for `act-cli`) and `wasm32-wasip2` (loaded here, hash-pinned in source).
 - v0.2 — Streaming tool results (`ToolResult::streaming`).
 - v0.x — `act:sessions/session-provider` support.
-- v0.x — Web Worker isolation (run components off the main thread).
+- v0.x — Web Worker isolation (run *components* off the main thread; transpilation already runs in a worker).
 
 ## License
 
